@@ -17,7 +17,7 @@
     if (!/^[0-9a-f]{32}$/.test(id || "")) return;
     el.setAttribute("data-zeccheckout-mounted", "1");
     var f = document.createElement("iframe");
-    f.src = origin + "/pay/" + id + "?embed=1";
+    f.src = origin + "/pay/" + id + "?embed=1&parent=" + encodeURIComponent(window.location.origin);
     f.title = "Zcash payment";
     f.referrerPolicy = "no-referrer";
     f.setAttribute("sandbox", "allow-scripts allow-same-origin allow-popups allow-top-navigation-by-user-activation");

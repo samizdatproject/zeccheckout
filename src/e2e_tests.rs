@@ -136,6 +136,9 @@ async fn full_checkout_flow_over_http() {
     let got = received.lock().unwrap().clone();
     assert_eq!(got.iter().map(|v| v["event"].as_str().unwrap()).collect::<Vec<_>>(), ["invoice.detected", "invoice.paid"]);
     assert_eq!(got[1]["invoice"]["order_id"], "ord_42");
+    assert_eq!(got[0]["seq"], 1);
+    assert_eq!(got[1]["seq"], 2);
+    assert_ne!(got[0]["event_id"], got[1]["event_id"]);
     assert_eq!(got[1]["invoice"]["id"], id.as_str());
     // Nothing left to deliver.
     assert_eq!(delivery.deliver_due(&app.db, now() + 10_000).await.unwrap(), 0);
@@ -150,6 +153,13 @@ async fn full_checkout_flow_over_http() {
     // Merchant API read-back.
     let r: Value = http.get(format!("{base}/api/v1/invoices/{id}")).bearer_auth(KEY).send().await.unwrap().json().await.unwrap();
     assert_eq!(r["status"], Status::Paid.as_str());
-    let health: Value = http.get(format!("{base}/healthz")).send().await.unwrap().json().await.unwrap();
+    let health: Value = http.get(format!("{base}/healthz")).bearer_auth(KEY).send().await.unwrap().json().await.unwrap();
     assert_eq!(health["webhooks_delivered"], 2);
+    // Without the key, /healthz reveals nothing about sales volume.
+    let public: Value = http.get(format!("{base}/healthz")).send().await.unwrap().json().await.unwrap();
+    assert!(public.get("webhooks_delivered").is_none() && public.get("chain_tip").is_none());
+
+    // The checkout only pins postMessage to an allow-listed embedder.
+    let html = http.get(format!("{base}/pay/{id}?embed=1&parent=https%3A%2F%2Fevil.example")).send().await.unwrap().text().await.unwrap();
+    assert!(html.contains(r#"data-parent-origin="""#));
 }

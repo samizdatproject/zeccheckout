@@ -24,7 +24,7 @@ Compact blocks carry only the first 52 bytes of each note ciphertext. That is en
 
 ZecCheckout therefore never fetches individual transactions. Each invoice gets a unique diversified address, and the diversifier index recovered from the decrypted note identifies the invoice directly. To any outside observer, diversified addresses derived from the same key cannot be linked to each other, so customers cannot connect two invoices to one merchant wallet just by comparing addresses.
 
-You can optionally add a ZIP-321 memo (`ZC_INCLUDE_MEMO=true`) so the merchant's own wallet shows which invoice a payment was for. ZecCheckout does not use the memo for matching.
+You can optionally add a ZIP-321 memo (`ZC_INCLUDE_MEMO=true`). It contains only your `order_id` ("Order ord_42"), never the invoice ID, so the merchant's own wallet shows which order a payment was for. ZecCheckout does not use the memo for matching. Note that the memo is also stored in the customer's wallet history.
 
 ## Quickstart (testnet)
 
@@ -75,7 +75,7 @@ POST /api/v1/invoices
 | `GET /i/{id}` | id is the capability | Minimal public status, used by the widget. It contains no address, txid or order data. |
 | `GET /i/{id}/qr.svg` | id is the capability | QR code of the ZIP-321 URI, rendered server-side. |
 | `GET /assets/widget.js` | — | Embeddable widget. |
-| `GET /healthz` | — | Sync status and webhook counters. |
+| `GET /healthz` | — / bearer | Public: liveness and a `synced` flag only. With the API key it also returns the chain tip, scanned height and webhook counters. The counters are hidden from the public because they would reveal sales volume. |
 
 Invoice IDs are random 128-bit values.
 
@@ -106,11 +106,11 @@ The widget loads an iframe from your own ZecCheckout server. Add your shop's ori
 
 ## Webhooks
 
-ZecCheckout sends a `POST` to `ZC_WEBHOOK_URL` on every status transition: `invoice.underpaid`, `invoice.detected`, `invoice.paid`, `invoice.expired`.
+ZecCheckout sends a `POST` to `ZC_WEBHOOK_URL` on every status transition: `invoice.underpaid`, `invoice.detected`, `invoice.paid`, `invoice.expired`, and `invoice.pending` (sent when a chain reorg removes an unconfirmed payment).
 
 ```
 ZecCheckout-Signature: t=1791483900,v1=hex(HMAC_SHA256(ZC_WEBHOOK_SECRET, "1791483900." + raw_body))
-{"event":"invoice.paid","created":1791483900,
+{"event":"invoice.paid","event_id":"1d81f04e…-3","seq":3,"created":1791483900,
  "invoice":{"id":"…","order_id":"ord_42","status":"paid","amount_zat":250000,"amount_zec":"0.0025",
             "received_zat":250000,"confirmed_zat":250000,"paid_at":1791483900}}
 ```
@@ -118,12 +118,14 @@ ZecCheckout-Signature: t=1791483900,v1=hex(HMAC_SHA256(ZC_WEBHOOK_SECRET, "17914
 **How to verify a webhook:**
 - Compute the HMAC over the **raw** body and compare it in constant time.
 - Reject a webhook whose `t` is more than 5 minutes old.
-- Treat `invoice.id` and `order_id` as idempotency keys.
+- Use `event_id` as the idempotency key. Ignore any event whose `seq` is not greater than the last `seq` you applied for that invoice.
 
 **Delivery:**
 - Webhooks go through a persistent SQLite outbox, so they survive restarts.
 - Failed deliveries are retried with exponential backoff (10 s, then doubling, up to 1 h) for 12 attempts.
+- Events for one invoice are delivered strictly in order. A later event is held back while an earlier one is still being retried.
 - Redirects are not followed.
+- After the last retry an event is dropped. Reconcile with `GET /api/v1/invoices` if your endpoint was down for hours.
 
 **Contents:** the payload contains no addresses, txids or memos.
 
@@ -154,11 +156,11 @@ All configuration is through environment variables; see [`.env.example`](.env.ex
 | `ZC_WEBHOOK_URL`, `ZC_WEBHOOK_SECRET` | optional | The secret must be at least 24 characters. |
 | `ZC_MIN_CONFIRMATIONS` | `3` | Use 10 or more on mainnet for large amounts. |
 | `ZC_INVOICE_TTL_SECS` | `3600` | Per-invoice override: `expires_in_secs`. |
-| `ZC_BIND`, `ZC_PUBLIC_URL` | `127.0.0.1:8080` | Bind to localhost and put a TLS reverse proxy (or an onion service) in front. |
+| `ZC_BIND`, `ZC_PUBLIC_URL` | `127.0.0.1:8080` | Bind to localhost and put an onion service or a TLS reverse proxy in front. Turn the proxy's access log off; see the threat model. |
 | `ZC_FRAME_ANCESTORS` | `'self'` | Origins allowed to embed the checkout. |
 | `ZC_DIVERSIFIER_START` | `1000000` | Invoice addresses start here, so they never collide with the low indices your normal wallet hands out. |
 | `ZC_BIRTHDAY` | current tip | First block to scan on first start. |
-| `ZC_INCLUDE_MEMO` | `false` | Adds a ZIP-321 memo referencing the invoice. |
+| `ZC_INCLUDE_MEMO` | `false` | Adds a ZIP-321 memo `Order <order_id>`. |
 
 ## Threat model
 
@@ -188,7 +190,7 @@ To limit exposure:
 
 **Can do:**
 - **Withhold or delay blocks**, which delays or blocks payment detection.
-- **Serve a fabricated chain.** A malicious lightwalletd could serve fabricated compact blocks containing notes encrypted to your addresses. ZecCheckout checks hash-chain continuity (`prev_hash`) and handles reorgs, but does **not** verify proof-of-work or note commitment tree roots. So a malicious lightwalletd can make an unpaid invoice look paid.
+- **Serve a fabricated chain.** A malicious lightwalletd could serve fabricated compact blocks containing notes encrypted to your addresses. ZecCheckout checks hash-chain continuity (`prev_hash`) and handles reorgs. Confirmations count only blocks that have actually been fetched and linked, not the tip height the server reports. It does **not** verify proof-of-work or note commitment tree roots. So a malicious lightwalletd can make an unpaid invoice look paid.
 
 **Mitigation: run your own node.** For real money, run your own `zebrad` + lightwalletd (or Zaino). Self-hosting removes both the metadata exposure and the trust in someone else's chain view. If you must use a public server, reach it over Tor, for example through a local Tor client and an onion lightwalletd endpoint, or a transparent Tor proxy for the process. Built-in SOCKS support is on the roadmap.
 
@@ -210,10 +212,12 @@ ZecCheckout also guards against a hostile or buggy server crashing the scanner: 
 **Logs contain:**
 - Invoice IDs.
 - Status transitions.
-- Detected pool and height.
+- The pool (Sapling or Orchard) of a detected payment.
+
+Logs contain no amounts and no block heights, so a log reader cannot pin a payment to a block.
 
 **Logs never contain:**
-- Requests. There is no access log, so no client IPs or user agents are recorded.
+- Requests. The Rust process has no access log, so it records no client IPs or user agents.
 - Addresses.
 - Txids.
 - Memos. ZecCheckout never even downloads memos.
@@ -223,6 +227,16 @@ ZecCheckout also guards against a hostile or buggy server crashing the scanner: 
 - Matched outputs. Txids are kept for de-duplication.
 - The last 1000 block hashes.
 - The webhook outbox.
+
+**Your reverse proxy will log customer IPs unless you stop it.** If you put nginx or Caddy in front, their default access logs record client IP, user agent and path. The checkout page polls `GET /i/<invoice id>`, so such a log becomes a table of customer IP → invoice → order. Disable it:
+
+```nginx
+location / { proxy_pass http://127.0.0.1:8080; access_log off; }
+```
+
+In Caddy, simply do not add a `log` directive. An onion service avoids the problem entirely, and customers don't need to reveal their IP to you either.
+
+**The embedded checkout iframe reports status only to the embedding shop.** It sends its status messages (invoice ID and status) via `postMessage` only to the embedding origin. That origin must appear in `ZC_FRAME_ANCESTORS`; otherwise nothing is sent.
 
 Outputs to other diversifier indices are ignored and not stored. This covers, for example, payments to your regular wallet address.
 
@@ -236,7 +250,7 @@ Outputs to other diversifier indices are ignored and not stored. This covers, fo
 ## Testing
 
 ```bash
-cargo test                                              # 22 unit + end-to-end tests, offline
+cargo test                                              # 23 unit + end-to-end tests, offline
 cargo test --test testnet_live -- --ignored --nocapture # live: scans 1500 real testnet blocks
 cargo clippy --all-targets                              # clean
 ```

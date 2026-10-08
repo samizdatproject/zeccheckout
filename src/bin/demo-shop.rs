@@ -47,6 +47,7 @@ struct Order {
     invoice_id: String,
     status: String,
     fulfilled: bool,
+    last_seq: u64,
 }
 
 struct Shop {
@@ -141,7 +142,14 @@ fn new_order_id() -> String {
     format!("ord_{}", hex::encode(b))
 }
 
-async fn buy(State(shop): St, Form(f): Form<BuyForm>) -> Response {
+async fn buy(State(shop): St, headers: HeaderMap, Form(f): Form<BuyForm>) -> Response {
+    // Minimal CSRF defence: browsers send Origin on cross-site POSTs.
+    if let Some(origin) = headers.get(header::ORIGIN).and_then(|v| v.to_str().ok()) {
+        let host = headers.get(header::HOST).and_then(|v| v.to_str().ok()).unwrap_or_default();
+        if origin != format!("http://{host}") && origin != format!("https://{host}") {
+            return (StatusCode::FORBIDDEN, "cross-origin request refused").into_response();
+        }
+    }
     let Some(product) = PRODUCTS.iter().find(|p| p.id == f.product) else {
         return (StatusCode::BAD_REQUEST, "unknown product").into_response();
     };
@@ -169,7 +177,7 @@ async fn buy(State(shop): St, Form(f): Form<BuyForm>) -> Response {
     let invoice_id = inv["id"].as_str().unwrap_or_default().to_owned();
     shop.orders.lock().unwrap().insert(
         order_id.clone(),
-        Order { product, invoice_id, status: "pending".into(), fulfilled: false },
+        Order { product, invoice_id, status: "pending".into(), fulfilled: false, last_seq: 0 },
     );
     tracing::info!(order = %order_id, product = product.id, "order created");
     Redirect::to(&format!("/order/{order_id}")).into_response()
@@ -219,10 +227,16 @@ async fn webhook_rx(State(shop): St, headers: HeaderMap, body: Bytes) -> Respons
     let order_id = v["invoice"]["order_id"].as_str().unwrap_or_default();
     let invoice_id = v["invoice"]["id"].as_str().unwrap_or_default();
     let status = v["invoice"]["status"].as_str().unwrap_or_default().to_owned();
+    let seq = v["seq"].as_u64().unwrap_or(0);
     let mut orders = shop.orders.lock().unwrap();
     match orders.get_mut(order_id) {
         // Cross-check the invoice id too, so a webhook can't fulfil the wrong order.
         Some(o) if o.invoice_id == invoice_id => {
+            if seq <= o.last_seq {
+                // Duplicate or out-of-order delivery: acknowledge, don't apply.
+                return StatusCode::NO_CONTENT.into_response();
+            }
+            o.last_seq = seq;
             o.status = status.clone();
             if status == "paid" && !o.fulfilled {
                 o.fulfilled = true;

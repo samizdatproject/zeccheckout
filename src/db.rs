@@ -318,6 +318,16 @@ impl Db {
         Ok(())
     }
 
+    /// Next per-invoice webhook sequence number (1-based).
+    pub fn next_webhook_seq(&self, invoice_id: &str) -> Result<u64> {
+        let n: i64 = self.lock().query_row(
+            "SELECT COUNT(*) FROM webhook_outbox WHERE invoice_id = ?1",
+            [invoice_id],
+            |r| r.get(0),
+        )?;
+        Ok(n as u64 + 1)
+    }
+
     pub fn enqueue_webhook(&self, invoice_id: &str, event: &str, body: &str, now: u64) -> Result<()> {
         self.lock().execute(
             "INSERT INTO webhook_outbox (invoice_id, event, body, next_attempt_at) VALUES (?1, ?2, ?3, ?4)",
@@ -330,7 +340,11 @@ impl Db {
         let c = self.lock();
         let mut st = c.prepare(
             "SELECT id, body, attempts FROM webhook_outbox
-             WHERE delivered_at IS NULL AND failed = 0 AND next_attempt_at <= ?1 ORDER BY id LIMIT 50",
+             WHERE delivered_at IS NULL AND failed = 0 AND next_attempt_at <= ?1
+               AND NOT EXISTS (SELECT 1 FROM webhook_outbox o2
+                               WHERE o2.invoice_id = webhook_outbox.invoice_id AND o2.id < webhook_outbox.id
+                                 AND o2.delivered_at IS NULL AND o2.failed = 0)
+             ORDER BY id LIMIT 50",
         )?;
         let rows = st
             .query_map([now as i64], |r| {

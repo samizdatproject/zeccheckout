@@ -40,7 +40,7 @@ impl Default for Settings {
             min_confirmations: 3,
             default_expiry_secs: 3600,
             diversifier_start: 1_000_000,
-            include_memo: true,
+            include_memo: false,
             merchant_name: None,
         }
     }
@@ -115,10 +115,12 @@ impl App {
         };
         let (address, j) = self.vk.invoice_address(start)?;
         let id = invoice::new_invoice_id();
-        let memo = self
-            .settings
-            .include_memo
-            .then(|| format!("zeccheckout invoice {}", &id[..12]));
+        // Optional memo for the merchant's own records: the merchant's order
+        // reference only (never the invoice id, which is a capability).
+        let memo = match (&order_id, self.settings.include_memo) {
+            (Some(o), true) => Some(format!("Order {o}")),
+            _ => None,
+        };
         let label = self.settings.merchant_name.clone();
         let uri = invoice::zip321_uri(&address, req.amount_zat, memo.as_deref(), label.as_deref())?;
         self.db.insert_invoice(&NewInvoice {
@@ -132,7 +134,7 @@ impl App {
             created_at: now,
             expires_at: now + ttl,
         })?;
-        tracing::info!(invoice = %id, amount_zat = req.amount_zat, "invoice created");
+        tracing::info!(invoice = %id, "invoice created");
         self.db
             .get_invoice(&id)?
             .ok_or_else(|| anyhow!("invoice vanished after insert"))
@@ -156,7 +158,7 @@ impl App {
                 .invoice_id_by_div_index(d.div_index)
                 .map_err(ApplyError::Other)?
             {
-                tracing::info!(invoice = %invoice_id, pool = d.pool.as_str(), height = h, "payment output detected");
+                tracing::info!(invoice = %invoice_id, pool = d.pool.as_str(), "payment output detected");
                 notes.push(NoteRow {
                     invoice_id,
                     pool: d.pool.as_str(),
@@ -209,7 +211,8 @@ impl App {
                 tracing::info!(invoice = %inv.id, from = inv.status.as_str(), to = ev.status.as_str(), "status change");
                 let updated = self.db.get_invoice(&inv.id)?.expect("exists");
                 let event = format!("invoice.{}", ev.status.as_str());
-                let body = webhook_body(&event, &updated, now);
+                let seq = self.db.next_webhook_seq(&inv.id)?;
+                let body = webhook_body(&event, &updated, seq, now);
                 self.db.enqueue_webhook(&inv.id, &event, &body, now)?;
                 changes.push((inv.id.clone(), ev.status));
             }
@@ -245,9 +248,12 @@ impl std::fmt::Display for ApplyError {
 
 /// Webhook payload. Deliberately excludes addresses, txids and memos: the
 /// merchant backend needs to know *that* an order was paid, not how.
-pub fn webhook_body(event: &str, inv: &InvoiceRow, now: u64) -> String {
+pub fn webhook_body(event: &str, inv: &InvoiceRow, seq: u64, now: u64) -> String {
     json!({
         "event": event,
+        // Unique per event (idempotency key) and monotonic per invoice.
+        "event_id": format!("{}-{}", inv.id, seq),
+        "seq": seq,
         "created": now,
         "invoice": {
             "id": inv.id,
@@ -316,9 +322,10 @@ pub async fn scan_step(
                 Err(ApplyError::Other(e)) => return Err(e),
             }
         }
-        app.refresh(tip, now())?;
+        app.refresh(scanned.min(tip), now())?;
     }
-    app.refresh(tip, now())?;
+    // Confirmations only count blocks we have actually fetched and linked.
+    app.refresh(scanned.min(tip), now())?;
 
     // Mempool: advisory "payment seen" for a snappier checkout UX. Never
     // affects invoice status, which only depends on mined, confirmed outputs.
@@ -372,7 +379,7 @@ mod tests {
         assert_ne!(a.address, b.address);
         assert!(b.div_index > a.div_index);
         assert!(a.div_index >= Settings::default().diversifier_start);
-        assert!(a.uri.contains("memo="));
+        assert!(!a.uri.contains("memo="), "memo is off by default");
         assert_eq!(a.status, Status::Pending);
         assert_eq!(a.expires_at, 3600);
         assert!(app.create_invoice(CreateInvoice { amount_zat: 0, order_id: None, description: None, expires_in_secs: None }, 0).is_err());
@@ -409,15 +416,27 @@ mod tests {
         assert_eq!(row.received_zat, 150_000);
         assert_eq!(row.paid_height, Some(102));
         assert_eq!(row.paid_at, Some(1004));
-        // Three webhooks queued: underpaid, detected, paid.
-        let due = app.db.due_webhooks(2000).unwrap();
-        assert_eq!(due.len(), 3);
-        let last: serde_json::Value = serde_json::from_str(&due[2].body).unwrap();
-        assert_eq!(last["event"], "invoice.paid");
-        assert_eq!(last["invoice"]["order_id"], "A-1");
+        // Three webhooks queued (underpaid, detected, paid), released strictly
+        // in order: only the head of the per-invoice queue is ever due.
+        let mut events = Vec::new();
+        loop {
+            let due = app.db.due_webhooks(2000).unwrap();
+            if due.is_empty() {
+                break;
+            }
+            assert_eq!(due.len(), 1);
+            events.push(due[0].body.clone());
+            app.db.mark_webhook_delivered(due[0].id, 2000).unwrap();
+        }
+        assert_eq!(events.len(), 3);
+        let parsed: Vec<serde_json::Value> = events.iter().map(|b| serde_json::from_str(b).unwrap()).collect();
+        let names: Vec<_> = parsed.iter().map(|v| v["event"].as_str().unwrap()).collect();
+        assert_eq!(names, ["invoice.underpaid", "invoice.detected", "invoice.paid"]);
+        assert_eq!(parsed.iter().map(|v| v["seq"].as_u64().unwrap()).collect::<Vec<_>>(), [1, 2, 3]);
+        assert_eq!(parsed[2]["invoice"]["order_id"], "A-1");
         // Privacy: no address / txid / memo in webhook payloads.
-        assert!(!due[2].body.contains(&inv.address));
-        assert!(!due[2].body.contains("memo"));
+        assert!(!events[2].contains(&inv.address));
+        assert!(!events[2].contains("memo"));
         // Re-applying the same block is idempotent.
         assert!(app.refresh(104, 1005).unwrap().is_empty());
     }

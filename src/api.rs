@@ -317,6 +317,22 @@ pub fn render(tpl: &str, vars: &[(&str, String)]) -> String {
 #[derive(Deserialize)]
 struct PayQ {
     embed: Option<u8>,
+    /// Origin of the embedding page (set by widget.js). Only honoured if it
+    /// is listed in ZC_FRAME_ANCESTORS; status messages go to that origin only.
+    parent: Option<String>,
+}
+
+/// Returns `parent` if it exactly matches one of the configured
+/// frame-ancestor origins.
+pub fn allowed_parent(frame_ancestors: &str, parent: Option<&str>) -> Option<String> {
+    let p = parent?.trim_end_matches('/');
+    if p.is_empty() || p.contains(['"', '<', '>', ' ', '\'', '*']) {
+        return None;
+    }
+    frame_ancestors
+        .split_whitespace()
+        .any(|a| a.trim_end_matches('/') == p)
+        .then(|| p.to_owned())
 }
 
 async fn checkout_page(State(st): St, Path(id): Path<String>, Query(q): Query<PayQ>) -> Response {
@@ -346,25 +362,33 @@ async fn checkout_page(State(st): St, Path(id): Path<String>, Query(q): Query<Pa
             ("network", network.to_string()),
             ("testnet_banner", banner.to_string()),
             ("min_conf", st.app.settings.min_confirmations.to_string()),
+            (
+                "parent_origin",
+                html_escape(&allowed_parent(&st.frame_ancestors, q.parent.as_deref()).unwrap_or_default()),
+            ),
         ],
     );
     Html(html).into_response()
 }
 
-async fn health(State(st): St) -> Response {
+/// Public: liveness + sync flag only. Counters (which would reveal sales
+/// volume over time) require the merchant API key.
+async fn health(State(st): St, headers: HeaderMap) -> Response {
     let scanned = st.app.db.get_meta_u64("scan_height").ok().flatten();
     let tip = st.app.tip();
-    let (delivered, pending) = st.app.db.webhook_counts().unwrap_or((0, 0));
-    Json(json!({
+    let mut body = json!({
         "ok": true,
-        "network": st.app.vk.network_name(),
-        "chain_tip": tip,
-        "scanned_height": scanned,
         "synced": matches!((tip, scanned), (Some(t), Some(s)) if s >= t),
-        "webhooks_delivered": delivered,
-        "webhooks_pending": pending,
-    }))
-    .into_response()
+    });
+    if authorized(&st, &headers) {
+        let (delivered, pending) = st.app.db.webhook_counts().unwrap_or((0, 0));
+        body["network"] = json!(st.app.vk.network_name());
+        body["chain_tip"] = json!(tip);
+        body["scanned_height"] = json!(scanned);
+        body["webhooks_delivered"] = json!(delivered);
+        body["webhooks_pending"] = json!(pending);
+    }
+    Json(body).into_response()
 }
 
 #[cfg(test)]
@@ -374,6 +398,16 @@ mod tests {
     #[test]
     fn escaping() {
         assert_eq!(html_escape("<a href=\"x\">'&'</a>"), "&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;");
+    }
+
+    #[test]
+    fn parent_origin_must_be_allowlisted() {
+        let fa = "'self' https://shop.example http://127.0.0.1:8081";
+        assert_eq!(allowed_parent(fa, Some("https://shop.example")).as_deref(), Some("https://shop.example"));
+        assert_eq!(allowed_parent(fa, Some("https://evil.example")), None);
+        assert_eq!(allowed_parent(fa, Some("'self'")), None);
+        assert_eq!(allowed_parent(fa, Some("*")), None);
+        assert_eq!(allowed_parent(fa, None), None);
     }
 
     #[test]

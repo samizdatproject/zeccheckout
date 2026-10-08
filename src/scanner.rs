@@ -47,10 +47,10 @@ pub struct Detected {
 /// Trial-decrypts every shielded output of a compact transaction.
 pub fn scan_tx(vk: &ViewingKey, tx: &CompactTx) -> Vec<Detected> {
     let mut out = Vec::new();
-    let mut txid = [0u8; 32];
-    if tx.txid.len() == 32 {
-        txid.copy_from_slice(&tx.txid);
-    }
+    let Ok(txid) = <[u8; 32]>::try_from(tx.txid.as_slice()) else {
+        tracing::warn!("compact transaction without a valid txid; skipping");
+        return out;
+    };
 
     if let Some(ivk) = vk.sapling_ivk() {
         for (i, o) in tx.outputs.iter().enumerate() {

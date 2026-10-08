@@ -5,6 +5,8 @@
   if (!root) return;
   var id = root.getAttribute("data-invoice");
   var minConf = root.getAttribute("data-min-conf");
+  // Set by the server only if the embedder's origin is in ZC_FRAME_ANCESTORS.
+  var parentOrigin = root.getAttribute("data-parent-origin");
   var statusBox = document.getElementById("status");
   var text = document.getElementById("status-text");
   var sub = document.getElementById("status-sub");
@@ -27,9 +29,10 @@
   });
 
   function notifyParent(status) {
-    if (window.parent && window.parent !== window) {
-      // Only the invoice id and status leave the frame.
-      window.parent.postMessage({ type: "zeccheckout:status", invoice: id, status: status }, "*");
+    if (parentOrigin && window.parent && window.parent !== window) {
+      // Only the invoice id and status leave the frame, and only to the
+      // allow-listed embedding origin.
+      window.parent.postMessage({ type: "zeccheckout:status", invoice: id, status: status }, parentOrigin);
     }
   }
 

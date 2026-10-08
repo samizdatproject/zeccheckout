@@ -87,7 +87,25 @@ impl Delivery {
     /// Attempts every due webhook once. Returns the number delivered.
     pub async fn deliver_due(&self, db: &Db, now: u64) -> Result<usize> {
         let mut delivered = 0;
-        for row in db.due_webhooks(now)? {
+        // Events for one invoice are delivered strictly in order, so a
+        // delivery can unblock the next event: loop until no progress.
+        loop {
+            let before = delivered;
+            let rows = db.due_webhooks(now)?;
+            if rows.is_empty() {
+                break;
+            }
+            delivered += self.deliver_rows(db, rows, now).await?;
+            if delivered == before {
+                break;
+            }
+        }
+        Ok(delivered)
+    }
+
+    async fn deliver_rows(&self, db: &Db, rows: Vec<crate::db::OutboxRow>, now: u64) -> Result<usize> {
+        let mut delivered = 0;
+        for row in rows {
             let body = row.body.into_bytes();
             let header = signature_header(&self.secret, now, &body);
             let res = self
