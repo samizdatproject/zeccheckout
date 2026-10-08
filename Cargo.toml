@@ -1,0 +1,40 @@
+[package]
+name = "zeccheckout"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Self-hosted shielded Zcash invoice/checkout service that holds only a viewing key"
+publish = false
+
+[dependencies]
+zcash_client_backend = { version = "0.24", features = ["lightwalletd-tonic-transport", "lightwalletd-tonic-tls-webpki-roots"] }
+zcash_keys = { version = "0.16", features = ["orchard", "sapling"] }
+zcash_protocol = "0.10"
+zcash_address = "0.13"
+zip321 = "0.9"
+zip32 = "0.2"
+zcash_note_encryption = "0.4"
+orchard = "0.15"
+sapling-crypto = "0.7"
+tonic = { version = "0.14", features = ["tls-webpki-roots"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "signal"] }
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio", "query", "form"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots", "json"] }
+bip39 = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "ansi"] }
+
+[profile.dev]
+debug = 0
+
+[profile.dev.package."*"]
+opt-level = 2

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Pay {{amount_zec}} ZEC &middot; {{merchant}}</title>
+<link rel="stylesheet" href="/assets/checkout.css">
+</head>
+<body class="{{embed_class}}">
+<main class="card" id="checkout" data-invoice="{{id}}" data-min-conf="{{min_conf}}">
+  <header>
+    <div class="merchant">{{merchant}}</div>
+    <div class="desc">{{description}}</div>
+  </header>
+  {{testnet_banner}}
+  <section class="amount"><span id="amount">{{amount_zec}}</span> <span class="unit">ZEC</span></section>
+
+  <section id="pay-area">
+    <a class="qr" target="_top" href="{{uri}}" title="Open in your Zcash wallet"><img src="/i/{{id}}/qr.svg" alt="Payment QR code (ZIP-321)" width="240" height="240"></a>
+    <a class="btn primary" target="_top" href="{{uri}}">Open in wallet</a>
+    <details>
+      <summary>Pay manually</summary>
+      <label>Shielded address</label>
+      <div class="copyrow"><code id="addr">{{address}}</code><button type="button" class="btn small" data-copy="addr">Copy</button></div>
+      <label>Amount</label>
+      <div class="copyrow"><code id="amt">{{amount_zec}}</code><button type="button" class="btn small" data-copy="amt">Copy</button></div>
+      <p class="hint">This address is unique to this invoice, so no memo is needed. Send exactly the amount shown (or more).</p>
+    </details>
+  </section>
+
+  <section class="status" id="status" aria-live="polite">
+    <div class="dot" id="dot"></div>
+    <div>
+      <div id="status-text">Waiting for payment&hellip;</div>
+      <div class="sub" id="status-sub"></div>
+    </div>
+  </section>
+
+  <footer>
+    <span class="shield">&#128737; Fully shielded &middot; {{network}}</span>
+    <span id="expiry"></span>
+  </footer>
+</main>
+<script src="/assets/checkout.js"></script>
+</body>
+</html>
