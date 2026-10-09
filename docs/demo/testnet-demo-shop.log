@@ -1,0 +1,5 @@
+2026-10-09T08:39:14.049381Z  INFO demo shop on http://127.0.0.1:8081
+2026-10-09T08:39:47.617588Z  INFO order created order=ord_5c06e1d9fbd55c37 product="beans"
+2026-10-09T08:40:21.556508Z  INFO order created order=ord_b59ccef0ae222942 product="beans"
+2026-10-09T09:33:30.051877Z  INFO order created order=ord_8b351c3058e81f75 product="beans"
+2026-10-09T09:47:20.316394Z  INFO signature verified; payment confirmed; order fulfilled order="ord_8b351c3058e81f75"

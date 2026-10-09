@@ -4,7 +4,7 @@ A self-hosted Zcash checkout service for merchants who want to accept shielded p
 
 - **The server holds only a Unified Full Viewing Key (UFVK).** It never sees a seed or a spending key, so if it is compromised, no funds can be stolen.
 - **Every invoice gets its own shielded address.** ZecCheckout derives a fresh diversified Unified Address (Orchard + Sapling receivers, never transparent) for each invoice and presents it as a ZIP-321 payment URI and QR code.
-- **Payments are detected locally.** The server downloads compact blocks from lightwalletd and trial-decrypts every Sapling output and Orchard action with the viewing key. It maps each decrypted note back to its invoice by diversifier index, marks the invoice **paid** after *N* confirmations, and sends the merchant an **HMAC-signed webhook**.
+- **Payments are detected locally.** The server downloads compact blocks from lightwalletd and trial-decrypts every Sapling output and every Orchard and Ironwood action with the viewing key (Ironwood is the NU6.3 pool; its notes go to the same Orchard receiver). It maps each decrypted note back to its invoice by diversifier index, marks the invoice **paid** after *N* confirmations, and sends the merchant an **HMAC-signed webhook**.
 - **No third-party code.** There is an embeddable checkout widget and a small demo shop, and neither loads anything from a third party: no CDN, no fonts, no analytics, and a strict CSP enforces this.
 
 ```
@@ -16,7 +16,7 @@ A self-hosted Zcash checkout service for merchants who want to accept shielded p
       └──── signed webhook invoice.paid ────┘   └── /pay/{id} checkout page + widget.js ──► customer browser
 ```
 
-Status: working prototype. It is tested on Zcash testnet (live lightwalletd scanning) and with an in-process end-to-end test. Read [Limitations](#limitations) before using it with real money.
+Status: working prototype. It is tested on Zcash testnet with a real wallet payment ([testnet run](docs/demo/TESTNET_RUN.md)), with live lightwalletd scanning, and with an in-process end-to-end test. Read [Limitations](#limitations) before using it with real money.
 
 ## Why per-invoice diversified addresses instead of memos?
 
@@ -250,7 +250,7 @@ Outputs to other diversifier indices are ignored and not stored. This covers, fo
 ## Testing
 
 ```bash
-cargo test                                              # 23 unit + end-to-end tests, offline
+cargo test                                              # 24 unit + end-to-end tests, offline
 cargo test --test testnet_live -- --ignored --nocapture # live: scans 1500 real testnet blocks
 cargo clippy --all-targets                              # clean
 ```
@@ -268,7 +268,7 @@ cargo clippy --all-targets                              # clean
 - Backoff.
 - HTML escaping and single-pass templating.
 
-**Scanner tests:** the scanner tests build real encrypted Sapling outputs and Orchard actions addressed to invoice addresses, and to a stranger's addresses. They check that exactly the right outputs are detected, and that malformed outputs are skipped.
+**Scanner tests:** the scanner tests build real encrypted Sapling outputs, Orchard actions and Ironwood actions addressed to invoice addresses, and to a stranger's addresses. They check that exactly the right outputs are detected, and that malformed outputs are skipped.
 
 **Service tests:**
 - A partial Sapling payment plus an Orchard top-up, through to paid.
@@ -290,15 +290,14 @@ cargo clippy --all-targets                              # clean
 
 The live test connects to `testnet.zec.rocks` and downloads the last 1500 blocks. It checks real hash-chain continuity through the reorg detector, trial-decrypts everything, and fetches the mempool.
 
-### Not covered by automated tests
+### Real wallet payment (manual)
 
-A real wallet-to-ZecCheckout payment on testnet needs testnet TAZ, and we did not have a faucet available while developing. See `docs/DEMO_SCRIPT.md` for the manual run with a real wallet.
+On 2026-10-09 the Valar testnet faucet paid 0.125 TAZ to a demo-shop invoice address. ZecCheckout marked the invoice paid and the shop fulfilled the order on the signed webhook. The run, txid and timings are in [`docs/demo/TESTNET_RUN.md`](docs/demo/TESTNET_RUN.md). That run found that the faucet's NU6.3 wallet pays from the Ironwood pool, which the scanner did not read at the time; it does now.
 
 ## Limitations
 
 - The prototype uses a single process and a single SQLite database. That is fine for a small shop, but it is not horizontally scalable.
 - The first sync starts at the current tip, or at `ZC_BIRTHDAY`, which is intended. Scanning about 40k testnet blocks takes about 20 s.
-- The ironwood pool (`ironwood_actions` in the new compact format) is not scanned yet.
 - There is no admin UI. Use the API or `sqlite3`.
 
 ## How this was built (AI-assisted development disclosure)

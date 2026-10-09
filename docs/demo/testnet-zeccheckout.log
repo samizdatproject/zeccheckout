@@ -1,0 +1,21 @@
+# zeccheckout serve, run 1 (before the Ironwood fix). Repeated lightwalletd DNS-retry warnings collapsed.
+2026-10-09T08:39:14.785157Z  INFO starting ZecCheckout (viewing key only) network="testnet" lightwalletd=https://testnet.zec.rocks:443 min_conf=3
+2026-10-09T08:39:14.786077Z  INFO listening on http://127.0.0.1:8080
+2026-10-09T08:39:15.380714Z  INFO initialised scan height start=4481227
+2026-10-09T08:39:47.617014Z  INFO invoice created invoice=d3657a631a442b76e04a635ffe0772ff
+2026-10-09T08:40:21.555007Z  INFO invoice created invoice=d330dc2da75e14a21a2006d4793791a5
+2026-10-09T09:00:13.525592Z  WARN scanner: code: 'Unknown error', message: "transport error", source: tonic::transport::Error(Transport, hyper::Error(Io, Kind(AddrNotAvailable))): transport error: connection error: address not available
+2026-10-09T09:09:53.046847Z  INFO status change invoice=d3657a631a442b76e04a635ffe0772ff from="pending" to="expired"
+2026-10-09T09:10:22.323692Z  INFO status change invoice=d330dc2da75e14a21a2006d4793791a5 from="pending" to="expired"
+2026-10-09T09:29:31.124650Z  WARN scanner: code: 'Unknown error', message: "transport error", source: tonic::transport::Error(Transport, hyper::Error(Io, Kind(AddrNotAvailable))): transport error: connection error: address not available
+2026-10-09T09:29:36.139051Z  WARN scanner: connecting to lightwalletd: transport error: dns error: dns error: failed to lookup address information: nodename nor servname provided, or not known
+2026-10-09T09:29:41.142807Z  WARN scanner: connecting to lightwalletd: transport error: dns error: dns error: failed to lookup address information: nodename nor servname provided, or not known
+2026-10-09T09:33:30.037281Z  INFO invoice created invoice=3267a523d2a6415660d58d14f38e2659
+2026-10-09T09:34:02.727078Z  WARN scanner: code: 'Unknown error', message: "transport error", source: tonic::transport::Error(Transport, hyper::Error(Io, Kind(ConnectionReset))): transport error: connection error: connection reset
+# (44 dns-error retry lines in total; local resolver hiccup, scanner reconnected on its own)
+
+# zeccheckout serve, run 2 (Ironwood fix, rescan from 4481330)
+2026-10-09T09:47:17.300667Z  INFO starting ZecCheckout (viewing key only) network="testnet" lightwalletd=https://testnet.zec.rocks:443 min_conf=3
+2026-10-09T09:47:17.304940Z  INFO listening on http://127.0.0.1:8080
+2026-10-09T09:47:18.499585Z  INFO payment output detected invoice=3267a523d2a6415660d58d14f38e2659 pool="ironwood"
+2026-10-09T09:47:18.536077Z  INFO status change invoice=3267a523d2a6415660d58d14f38e2659 from="pending" to="paid"

@@ -1,0 +1,6 @@
+2026-10-09T09:33:34Z watching invoice 3267a523d2a6415660d58d14f38e2659 order ord_8b351c3058e81f75
+2026-10-09T09:33:40Z CHANGE {"invoice": {"amount_zec": "0.01", "confirmed_zec": "0", "expires_at": 1791540209, "id": "3267a523d2a6415660d58d14f38e2659", "min_confirmations": 3, "now": 1791538419, "received_zec": "0", "seen_in_mempool_zec": "0", "status": "pending"}, "shop_order": {"fulfilled": false, "status": "pending"}, "tip": 4481337, "scanned": 4481337}
+2026-10-09T09:47:16Z poll error <urlopen error [Errno 61] Connection refused>
+2026-10-09T09:47:19Z CHANGE {"invoice": {"amount_zec": "0.01", "confirmed_zec": "0.125", "expires_at": 1791540209, "id": "3267a523d2a6415660d58d14f38e2659", "min_confirmations": 3, "now": 1791539239, "received_zec": "0.125", "seen_in_mempool_zec": "0", "status": "paid"}, "shop_order": {"fulfilled": false, "status": "pending"}, "tip": 4481366, "scanned": 4481366}
+2026-10-09T09:47:21Z CHANGE {"invoice": {"amount_zec": "0.01", "confirmed_zec": "0.125", "expires_at": 1791540209, "id": "3267a523d2a6415660d58d14f38e2659", "min_confirmations": 3, "now": 1791539241, "received_zec": "0.125", "seen_in_mempool_zec": "0", "status": "paid"}, "shop_order": {"fulfilled": true, "status": "paid"}, "tip": 4481366, "scanned": 4481366}
+2026-10-09T09:47:21Z DONE

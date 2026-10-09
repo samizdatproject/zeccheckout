@@ -1,0 +1,16 @@
+{
+    "created": 1791539238,
+    "event": "invoice.paid",
+    "event_id": "3267a523d2a6415660d58d14f38e2659-1",
+    "invoice": {
+        "amount_zat": 1000000,
+        "amount_zec": "0.01",
+        "confirmed_zat": 12500000,
+        "id": "3267a523d2a6415660d58d14f38e2659",
+        "order_id": "ord_8b351c3058e81f75",
+        "paid_at": 1791539238,
+        "received_zat": 12500000,
+        "status": "paid"
+    },
+    "seq": 1
+}

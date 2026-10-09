@@ -11,6 +11,14 @@ Pick ONE payment path:
 - **A. Testnet (preferred if you can get TAZ):** `cargo run --bin zc-keygen -- ~/demo-seed.txt`,
   run `ZC_UFVK=uviewtest1... ZC_MIN_CONFIRMATIONS=1 scripts/demo.sh`. Pay from a testnet-capable
   wallet holding TAZ (e.g. zcash-devtool / Zingo testnet build). Zashi store builds are mainnet-only.
+- **A2. Testnet with the Valar faucet as the "customer" (no wallet needed, proven on 2026-10-09, see `docs/demo/TESTNET_RUN.md`):**
+  run `ZC_UFVK_FILE=ufvk.txt ZC_MIN_CONFIRMATIONS=1 scripts/demo.sh`. Buy "Bag of Sapling Beans" (0.01) right before
+  recording the payment shot. In a second browser tab, open https://faucet.testnet.valargroup.dev and paste the
+  invoice address ("Pay manually" on the checkout). Alternatively, `curl -X POST …/api/claim -d '{"address":"utest1…"}'`.
+  The faucet pays 0.125 TAZ, so the invoice shows as overpaid and still `paid`. Limits: one claim per IP and per address per
+  24 h, and a global cap of 150/24 h. Check `GET /api/status` → `capRemaining` first, and do a dry run on a different day
+  or IP from the recording. The faucet pays from the Ironwood pool, so you need ZecCheckout at commit `2165490` or later.
+  For the video, swap shot 0:47–1:05 for the faucet tab and use the A2 caption 5 below.
 - **B. Mainnet tiny payment (simplest with Zashi):** `cargo run --bin zc-keygen -- --mainnet ~/demo-mainnet-seed.txt`
   (24 words; restore later in Zashi to recover the coins), then
   `ZC_NETWORK=mainnet ZC_UFVK=uview1... ZC_MIN_CONFIRMATIONS=1 scripts/demo.sh`.
@@ -34,6 +42,9 @@ Do a full dry run first. Blur nothing — there are no secrets on screen (the UF
 | 1:35–1:47 | Shop panel turns green: "PAID — order fulfilled ✓ (verified webhook)"; shop log "signature verified" | "The shop fulfils only on an HMAC-signed webhook, never on the browser." |
 | 1:47–1:57 | README threat-model section scroll; DevTools Network tab showing only same-origin requests | "No CDNs, no trackers, strict CSP, no request logs. Threat model in the README: run your own lightwalletd, or use Tor." |
 | 1:57–2:00 | End card: repo URL, "MIT · Rust · librustzcash" | "ZecCheckout — open source. Built for ZECATHON (Shielded Payments)." |
+
+Faucet version (A2), caption 5: "A testnet faucet plays the customer: a real zecd wallet sends to the invoice address. No memo is needed, because the address itself identifies the invoice."
+Faucet version (A2), caption 7: also show `payment output detected pool="ironwood"` in the log. Ironwood is the NU6.3 pool, and it is scanned with the same viewing key.
 
 ## Captions (.srt)
 

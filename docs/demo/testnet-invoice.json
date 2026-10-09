@@ -1,0 +1,17 @@
+{
+    "address": "utest1kdtcmhxz8epe33d2ax3jc2uwnswulz70085hl82lvdhlltgk6f7xwqwqxj0wzs94mv2qq6wa89e9fj4wewchk4c0sj9a7xtrqcs3tkmt32v90j29vjq3v4vjstyz5vydpkus9n4qltsjus4u0vzxy9w45ae9m8xqa02sslt7v5zzeef8",
+    "amount_zat": 1000000,
+    "amount_zec": "0.01",
+    "checkout_url": "http://127.0.0.1:8080/pay/3267a523d2a6415660d58d14f38e2659",
+    "confirmed_zat": 12500000,
+    "created_at": 1791538409,
+    "description": "Bag of Sapling Beans",
+    "expires_at": 1791540209,
+    "id": "3267a523d2a6415660d58d14f38e2659",
+    "min_confirmations": 3,
+    "order_id": "ord_8b351c3058e81f75",
+    "paid_at": 1791539238,
+    "payment_uri": "zcash:utest1kdtcmhxz8epe33d2ax3jc2uwnswulz70085hl82lvdhlltgk6f7xwqwqxj0wzs94mv2qq6wa89e9fj4wewchk4c0sj9a7xtrqcs3tkmt32v90j29vjq3v4vjstyz5vydpkus9n4qltsjus4u0vzxy9w45ae9m8xqa02sslt7v5zzeef8?amount=0.01&label=Shielded%20Coffee",
+    "received_zat": 12500000,
+    "status": "paid"
+}
