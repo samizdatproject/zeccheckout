@@ -7,7 +7,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use zcash_client_backend::proto::compact_formats::CompactBlock;
+use zcash_client_backend::proto::compact_formats::{CompactBlock, CompactTx};
 
 use crate::db::{Db, InvoiceRow, NewInvoice, NoteRow};
 use crate::invoice::{self, Status};
@@ -226,6 +226,20 @@ impl App {
         self.db.rollback_to(to)
     }
 
+    /// Replaces the advisory mempool view with what `txs` pay to invoices.
+    pub fn record_mempool(&self, txs: &[CompactTx]) -> Result<()> {
+        let mut seen: HashMap<String, u64> = HashMap::new();
+        for tx in txs {
+            for d in scanner::scan_tx(&self.vk, tx) {
+                if let Some(id) = self.db.invoice_id_by_div_index(d.div_index)? {
+                    *seen.entry(id).or_default() += d.value_zat;
+                }
+            }
+        }
+        *self.mempool_seen.lock().unwrap() = seen;
+        Ok(())
+    }
+
     pub fn mempool_seen_for(&self, id: &str) -> u64 {
         self.mempool_seen.lock().unwrap().get(id).copied().unwrap_or(0)
     }
@@ -330,17 +344,7 @@ pub async fn scan_step(
     // Mempool: advisory "payment seen" for a snappier checkout UX. Never
     // affects invoice status, which only depends on mined, confirmed outputs.
     match client.mempool().await {
-        Ok(txs) => {
-            let mut seen: HashMap<String, u64> = HashMap::new();
-            for tx in &txs {
-                for d in scanner::scan_tx(&app.vk, tx) {
-                    if let Some(id) = app.db.invoice_id_by_div_index(d.div_index)? {
-                        *seen.entry(id).or_default() += d.value_zat;
-                    }
-                }
-            }
-            *app.mempool_seen.lock().unwrap() = seen;
-        }
+        Ok(txs) => app.record_mempool(&txs)?,
         Err(e) => tracing::debug!("mempool fetch failed: {e:#}"),
     }
     Ok(())
@@ -359,7 +363,7 @@ pub async fn run_webhooks(app: Arc<App>, delivery: Delivery, poll: Duration) {
 mod tests {
     use super::*;
     use crate::keys::tests::{decode_ua, test_ufvk};
-    use crate::scanner::tests::{block, orchard_action, sapling_output, tx};
+    use crate::scanner::tests::{block, ironwood_action, orchard_action, sapling_output, tx};
     use zcash_protocol::consensus::Network;
 
     fn app() -> App {
@@ -461,6 +465,45 @@ mod tests {
         }
         assert!(app.db.received_for(&inv.id).unwrap().is_empty());
         app.refresh(202, 2).unwrap();
+        assert_eq!(app.db.get_invoice(&inv.id).unwrap().unwrap().status, Status::Pending);
+    }
+
+    #[test]
+    fn ironwood_in_mempool_is_seen() {
+        let app = app();
+        let inv = app.create_invoice(CreateInvoice { amount_zat: 1000, order_id: None, description: None, expires_in_secs: None }, 0).unwrap();
+        let ua = decode_ua(&inv.address);
+        let mut t = tx(1, vec![], vec![]);
+        t.ironwood_actions = vec![ironwood_action(ua.orchard().unwrap(), 1000)];
+        app.record_mempool(&[t]).unwrap();
+        assert_eq!(app.mempool_seen_for(&inv.id), 1000);
+        app.record_mempool(&[]).unwrap();
+        assert_eq!(app.mempool_seen_for(&inv.id), 0);
+    }
+
+    #[test]
+    fn orchard_and_ironwood_at_same_index_both_count_and_roll_back() {
+        let app = app();
+        let inv = app.create_invoice(CreateInvoice { amount_zat: 3000, order_id: None, description: None, expires_in_secs: None }, 0).unwrap();
+        let ua = decode_ua(&inv.address);
+        let b1 = block(400, [0; 32], vec![]);
+        app.apply_block(&b1).unwrap();
+        // One tx, Orchard action 0 and Ironwood action 0: distinct notes.
+        let mut t = tx(7, vec![], vec![orchard_action(ua.orchard().unwrap(), 1000)]);
+        t.ironwood_actions = vec![ironwood_action(ua.orchard().unwrap(), 2000)];
+        let b2 = block(401, hash_of(&b1), vec![t]);
+        assert_eq!(app.apply_block(&b2).unwrap(), 2);
+        assert_eq!(app.db.received_for(&inv.id).unwrap().len(), 2);
+        app.refresh(401, 1).unwrap();
+        assert_eq!(app.db.get_invoice(&inv.id).unwrap().unwrap().status, Status::Detected);
+
+        let fork = block(402, [0xBB; 32], vec![]);
+        match app.apply_block(&fork) {
+            Err(ApplyError::Reorg { height }) => app.handle_reorg(height).unwrap(),
+            other => panic!("expected reorg, got {other:?}"),
+        }
+        assert!(app.db.received_for(&inv.id).unwrap().is_empty());
+        app.refresh(402, 2).unwrap();
         assert_eq!(app.db.get_invoice(&inv.id).unwrap().unwrap().status, Status::Pending);
     }
 

@@ -17,7 +17,7 @@ Pick ONE payment path:
   invoice address ("Pay manually" on the checkout). Alternatively, `curl -X POST …/api/claim -d '{"address":"utest1…"}'`.
   The faucet pays 0.125 TAZ, so the invoice shows as overpaid and still `paid`. Limits: one claim per IP and per address per
   24 h, and a global cap of 150/24 h. Check `GET /api/status` → `capRemaining` first, and do a dry run on a different day
-  or IP from the recording. The faucet pays from the Ironwood pool, so you need ZecCheckout at commit `2165490` or later.
+  or IP from the recording. Since NU6.3, payments to Orchard receivers arrive as Ironwood outputs (on mainnet too), so you need ZecCheckout at commit `2165490` or later.
   For the video, swap shot 0:47–1:05 for the faucet tab and use the A2 caption 5 below.
 - **B. Mainnet tiny payment (simplest with Zashi):** `cargo run --bin zc-keygen -- --mainnet ~/demo-mainnet-seed.txt`
   (24 words; restore later in Zashi to recover the coins), then

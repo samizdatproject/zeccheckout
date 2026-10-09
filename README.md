@@ -212,7 +212,7 @@ ZecCheckout also guards against a hostile or buggy server crashing the scanner: 
 **Logs contain:**
 - Invoice IDs.
 - Status transitions.
-- The pool (Sapling or Orchard) of a detected payment.
+- The pool (Sapling, Orchard or Ironwood) of a detected payment.
 
 Logs contain no amounts and no block heights, so a log reader cannot pin a payment to a block.
 
@@ -250,7 +250,7 @@ Outputs to other diversifier indices are ignored and not stored. This covers, fo
 ## Testing
 
 ```bash
-cargo test                                              # 24 unit + end-to-end tests, offline
+cargo test                                              # 26 unit + end-to-end tests, offline
 cargo test --test testnet_live -- --ignored --nocapture # live: scans 1500 real testnet blocks
 cargo clippy --all-targets                              # clean
 ```
@@ -292,7 +292,7 @@ The live test connects to `testnet.zec.rocks` and downloads the last 1500 blocks
 
 ### Real wallet payment (manual)
 
-On 2026-10-09 the Valar testnet faucet paid 0.125 TAZ to a demo-shop invoice address. ZecCheckout marked the invoice paid and the shop fulfilled the order on the signed webhook. The run, txid and timings are in [`docs/demo/TESTNET_RUN.md`](docs/demo/TESTNET_RUN.md). That run found that the faucet's NU6.3 wallet pays from the Ironwood pool, which the scanner did not read at the time; it does now.
+On 2026-10-09 the Valar testnet faucet paid 0.125 TAZ to a demo-shop invoice address. ZecCheckout marked the invoice paid and the shop fulfilled the order on the signed webhook. The run, txid and timings are in [`docs/demo/TESTNET_RUN.md`](docs/demo/TESTNET_RUN.md). That run showed that the scanner did not read the Ironwood pool yet; it does now. Since NU6.3, consensus allows an Orchard bundle to pay only the sender's own change, so every payment to an invoice's Orchard receiver arrives as an Ironwood output. NU6.3 activated on mainnet at height 3,428,143, and the mainnet tip was 3,511,638 on 2026-10-09, so this applies to mainnet too. On testnet it activated at 4,134,000.
 
 ## Limitations
 

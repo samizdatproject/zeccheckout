@@ -13,7 +13,7 @@ use tonic::transport::{Channel, ClientTlsConfig, Endpoint};
 use zcash_client_backend::proto::compact_formats::{CompactBlock, CompactOrchardAction, CompactTx};
 use zcash_client_backend::proto::service::{
     compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange, ChainSpec,
-    GetMempoolTxRequest, PoolType,
+    GetMempoolTxRequest,
 };
 use zcash_note_encryption::{try_compact_note_decryption, COMPACT_NOTE_SIZE};
 
@@ -58,7 +58,10 @@ pub fn scan_tx(vk: &ViewingKey, tx: &CompactTx) -> Vec<Detected> {
         for (i, o) in tx.outputs.iter().enumerate() {
             // Upstream conversions panic on wrong lengths; a hostile or buggy
             // lightwalletd must not be able to crash the scanner.
-            if o.cmu.len() != 32 || o.ephemeral_key.len() != 32 || o.ciphertext.len() != COMPACT_NOTE_SIZE {
+            if o.cmu.len() != 32
+                || o.ephemeral_key.len() != 32
+                || o.ciphertext.len() != COMPACT_NOTE_SIZE
+            {
                 continue;
             }
             let Ok(desc) = sapling_crypto::note_encryption::CompactOutputDescription::try_from(o)
@@ -66,11 +69,13 @@ pub fn scan_tx(vk: &ViewingKey, tx: &CompactTx) -> Vec<Detected> {
                 continue;
             };
             // All heights we scan are post-Canopy (ZIP 212 fully enforced).
-            if let Some((note, addr)) = sapling_crypto::note_encryption::try_sapling_compact_note_decryption(
-                ivk,
-                &desc,
-                sapling_crypto::note_encryption::Zip212Enforcement::On,
-            ) {
+            if let Some((note, addr)) =
+                sapling_crypto::note_encryption::try_sapling_compact_note_decryption(
+                    ivk,
+                    &desc,
+                    sapling_crypto::note_encryption::Zip212Enforcement::On,
+                )
+            {
                 if let Some(j) = vk.sapling_index(&addr) {
                     out.push(Detected {
                         div_index: j,
@@ -87,8 +92,22 @@ pub fn scan_tx(vk: &ViewingKey, tx: &CompactTx) -> Vec<Detected> {
     if let Some(ivk) = vk.orchard_ivk() {
         // Ironwood (NU6.3+) actions are Orchard-shaped and decrypt with the
         // same Orchard IVK, but under the Ironwood (v3 plaintext) domain.
-        scan_actions::<orchard::note_encryption::OrchardVersion>(vk, ivk, &tx.actions, Pool::Orchard, txid, &mut out);
-        scan_actions::<orchard::note_encryption::IronwoodVersion>(vk, ivk, &tx.ironwood_actions, Pool::Ironwood, txid, &mut out);
+        scan_actions::<orchard::note_encryption::OrchardVersion>(
+            vk,
+            ivk,
+            &tx.actions,
+            Pool::Orchard,
+            txid,
+            &mut out,
+        );
+        scan_actions::<orchard::note_encryption::IronwoodVersion>(
+            vk,
+            ivk,
+            &tx.ironwood_actions,
+            Pool::Ironwood,
+            txid,
+            &mut out,
+        );
     }
     out
 }
@@ -102,16 +121,27 @@ fn scan_actions<V: orchard::note_encryption::DomainVersion>(
     out: &mut Vec<Detected>,
 ) {
     for (i, a) in actions.iter().enumerate() {
-        if a.nullifier.len() != 32 || a.cmx.len() != 32 || a.ephemeral_key.len() != 32 || a.ciphertext.len() != COMPACT_NOTE_SIZE {
+        if a.nullifier.len() != 32
+            || a.cmx.len() != 32
+            || a.ephemeral_key.len() != 32
+            || a.ciphertext.len() != COMPACT_NOTE_SIZE
+        {
             continue;
         }
         let Ok(action) = orchard::note_encryption::CompactAction::try_from(a) else {
             continue;
         };
-        let domain = orchard::note_encryption::NoteEncryptionDomain::<V>::for_compact_action(&action);
+        let domain =
+            orchard::note_encryption::NoteEncryptionDomain::<V>::for_compact_action(&action);
         if let Some((note, addr)) = try_compact_note_decryption(&domain, ivk, &action) {
             if let Some(j) = vk.orchard_index(&addr) {
-                out.push(Detected { div_index: j, pool, txid, output_index: i as u32, value_zat: note.value().inner() });
+                out.push(Detected {
+                    div_index: j,
+                    pool,
+                    txid,
+                    output_index: i as u32,
+                    value_zat: note.value().inner(),
+                });
             }
         }
     }
@@ -146,15 +176,28 @@ impl Lightwalletd {
     }
 
     pub async fn tip(&mut self) -> Result<u64> {
-        Ok(self.client.get_latest_block(ChainSpec {}).await?.into_inner().height)
+        Ok(self
+            .client
+            .get_latest_block(ChainSpec {})
+            .await?
+            .into_inner()
+            .height)
     }
 
     /// Streams compact blocks `[start, end]` (inclusive), shielded data only.
     pub async fn blocks(&mut self, start: u64, end: u64) -> Result<Vec<CompactBlock>> {
         let req = BlockRange {
-            start: Some(BlockId { height: start, hash: vec![] }),
-            end: Some(BlockId { height: end, hash: vec![] }),
-            pool_types: vec![PoolType::Sapling as i32, PoolType::Orchard as i32, PoolType::Ironwood as i32],
+            start: Some(BlockId {
+                height: start,
+                hash: vec![],
+            }),
+            end: Some(BlockId {
+                height: end,
+                hash: vec![],
+            }),
+            // Empty = the legacy default: all shielded pools (Sapling, Orchard,
+            // Ironwood). Naming pools explicitly is rejected by older servers.
+            pool_types: vec![],
         };
         let mut stream = self.client.get_block_range(req).await?.into_inner();
         let mut out = Vec::with_capacity((end + 1).saturating_sub(start) as usize);
@@ -175,7 +218,9 @@ impl Lightwalletd {
     pub async fn mempool(&mut self) -> Result<Vec<CompactTx>> {
         let req = GetMempoolTxRequest {
             exclude_txid_suffixes: vec![],
-            pool_types: vec![PoolType::Sapling as i32, PoolType::Orchard as i32, PoolType::Ironwood as i32],
+            // Empty = the legacy default: all shielded pools (Sapling, Orchard,
+            // Ironwood). Naming pools explicitly is rejected by older servers.
+            pool_types: vec![],
         };
         let mut stream = self.client.get_mempool_tx(req).await?.into_inner();
         let mut out = Vec::new();
@@ -194,11 +239,16 @@ pub(crate) mod tests {
     use super::*;
     use crate::keys::tests::{decode_ua, test_ufvk};
     use rand::{rngs::OsRng, RngCore};
-    use zcash_client_backend::proto::compact_formats::{CompactOrchardAction, CompactSaplingOutput};
+    use zcash_client_backend::proto::compact_formats::{
+        CompactOrchardAction, CompactSaplingOutput,
+    };
     use zcash_note_encryption::{Domain, NoteEncryption};
     use zcash_protocol::consensus::Network;
 
-    pub fn sapling_output(addr: &sapling_crypto::PaymentAddress, value: u64) -> CompactSaplingOutput {
+    pub fn sapling_output(
+        addr: &sapling_crypto::PaymentAddress,
+        value: u64,
+    ) -> CompactSaplingOutput {
         let mut rseed = [0u8; 32];
         OsRng.fill_bytes(&mut rseed);
         let note = sapling_crypto::Note::from_parts(
@@ -206,7 +256,12 @@ pub(crate) mod tests {
             sapling_crypto::value::NoteValue::from_raw(value),
             sapling_crypto::Rseed::AfterZip212(rseed),
         );
-        let enc = sapling_crypto::note_encryption::sapling_note_encryption(None, note.clone(), [0u8; 512], &mut OsRng);
+        let enc = sapling_crypto::note_encryption::sapling_note_encryption(
+            None,
+            note.clone(),
+            [0u8; 512],
+            &mut OsRng,
+        );
         let epk = sapling_crypto::note_encryption::SaplingDomain::epk_bytes(enc.epk());
         let ct = enc.encrypt_note_plaintext();
         CompactSaplingOutput {
@@ -217,11 +272,19 @@ pub(crate) mod tests {
     }
 
     pub fn orchard_action(addr: &orchard::Address, value: u64) -> CompactOrchardAction {
-        action_with::<orchard::note_encryption::OrchardVersion>(addr, value, orchard::note::NoteVersion::V2)
+        action_with::<orchard::note_encryption::OrchardVersion>(
+            addr,
+            value,
+            orchard::note::NoteVersion::V2,
+        )
     }
 
     pub fn ironwood_action(addr: &orchard::Address, value: u64) -> CompactOrchardAction {
-        action_with::<orchard::note_encryption::IronwoodVersion>(addr, value, orchard::note::NoteVersion::V3)
+        action_with::<orchard::note_encryption::IronwoodVersion>(
+            addr,
+            value,
+            orchard::note::NoteVersion::V3,
+        )
     }
 
     fn action_with<V: orchard::note_encryption::DomainVersion>(
@@ -235,12 +298,14 @@ pub(crate) mod tests {
             let mut rb = [0u8; 32];
             OsRng.fill_bytes(&mut rb);
             rb[31] &= 0x3f;
-            let Some(rho) = Option::<orchard::note::Rho>::from(orchard::note::Rho::from_bytes(&rb)) else {
+            let Some(rho) = Option::<orchard::note::Rho>::from(orchard::note::Rho::from_bytes(&rb))
+            else {
                 continue;
             };
             let mut seed = [0u8; 32];
             OsRng.fill_bytes(&mut seed);
-            let Some(rseed) = Option::from(orchard::note::RandomSeed::from_bytes(seed, &rho)) else {
+            let Some(rseed) = Option::from(orchard::note::RandomSeed::from_bytes(seed, &rho))
+            else {
                 continue;
             };
             let Some(note) = Option::from(orchard::Note::from_parts(
@@ -255,7 +320,9 @@ pub(crate) mod tests {
             break (rb, rho, note);
         };
         let _ = rho;
-        let enc = NoteEncryption::<orchard::note_encryption::NoteEncryptionDomain<V>>::new(None, note, [0u8; 512]);
+        let enc = NoteEncryption::<orchard::note_encryption::NoteEncryptionDomain<V>>::new(
+            None, note, [0u8; 512],
+        );
         let epk = orchard::note_encryption::NoteEncryptionDomain::<V>::epk_bytes(enc.epk());
         let ct = enc.encrypt_note_plaintext();
         let cmx = orchard::note::ExtractedNoteCommitment::from(note.commitment());
@@ -267,7 +334,11 @@ pub(crate) mod tests {
         }
     }
 
-    pub fn tx(id: u8, outputs: Vec<CompactSaplingOutput>, actions: Vec<CompactOrchardAction>) -> CompactTx {
+    pub fn tx(
+        id: u8,
+        outputs: Vec<CompactSaplingOutput>,
+        actions: Vec<CompactOrchardAction>,
+    ) -> CompactTx {
         CompactTx {
             index: 0,
             txid: vec![id; 32],
@@ -305,9 +376,13 @@ pub(crate) mod tests {
         let ua2 = decode_ua(&a2);
 
         // A stranger's address (different seed).
-        let other = zcash_keys::keys::UnifiedSpendingKey::from_seed(&Network::TestNetwork, &[9u8; 32], zip32::AccountId::ZERO)
-            .unwrap()
-            .to_unified_full_viewing_key();
+        let other = zcash_keys::keys::UnifiedSpendingKey::from_seed(
+            &Network::TestNetwork,
+            &[9u8; 32],
+            zip32::AccountId::ZERO,
+        )
+        .unwrap()
+        .to_unified_full_viewing_key();
         let other_vk = ViewingKey::from_ufvk(Network::TestNetwork, other).unwrap();
         let (oa, _) = other_vk.invoice_address(0).unwrap();
         let oua = decode_ua(&oa);
@@ -316,29 +391,81 @@ pub(crate) mod tests {
             10,
             [0u8; 32],
             vec![
-                tx(1, vec![sapling_output(ua1.sapling().unwrap(), 5000)], vec![orchard_action(oua.orchard().unwrap(), 1)]),
-                tx(2, vec![sapling_output(oua.sapling().unwrap(), 7)], vec![orchard_action(ua2.orchard().unwrap(), 12345)]),
+                tx(
+                    1,
+                    vec![sapling_output(ua1.sapling().unwrap(), 5000)],
+                    vec![orchard_action(oua.orchard().unwrap(), 1)],
+                ),
+                tx(
+                    2,
+                    vec![sapling_output(oua.sapling().unwrap(), 7)],
+                    vec![orchard_action(ua2.orchard().unwrap(), 12345)],
+                ),
             ],
         );
         let found = scan_block(&vk, &b);
         assert_eq!(found.len(), 2, "{found:?}");
-        assert_eq!(found[0], Detected { div_index: j1, pool: Pool::Sapling, txid: [1; 32], output_index: 0, value_zat: 5000 });
-        assert_eq!(found[1], Detected { div_index: j2, pool: Pool::Orchard, txid: [2; 32], output_index: 0, value_zat: 12345 });
+        assert_eq!(
+            found[0],
+            Detected {
+                div_index: j1,
+                pool: Pool::Sapling,
+                txid: [1; 32],
+                output_index: 0,
+                value_zat: 5000
+            }
+        );
+        assert_eq!(
+            found[1],
+            Detected {
+                div_index: j2,
+                pool: Pool::Orchard,
+                txid: [2; 32],
+                output_index: 0,
+                value_zat: 12345
+            }
+        );
         // The stranger sees exactly their own two outputs.
         assert_eq!(scan_block(&other_vk, &b).len(), 2);
     }
 
     #[test]
     fn detects_ironwood_actions_with_the_orchard_ivk() {
-        // NU6.3 testnet wallets (e.g. the Valar faucet) pay Unified Addresses
-        // from the Ironwood pool, to the address's Orchard receiver.
+        // From NU6.3, consensus restricts Orchard bundles to the sender's own
+        // change (no cross-address outputs), so any payment to an invoice's
+        // Orchard receiver arrives as an Ironwood action.
         let vk = ViewingKey::from_ufvk(Network::TestNetwork, test_ufvk()).unwrap();
         let (a, j) = vk.invoice_address(200).unwrap();
         let ua = decode_ua(&a);
         let mut t = tx(3, vec![], vec![]);
         t.ironwood_actions = vec![ironwood_action(ua.orchard().unwrap(), 12_500_000)];
         let found = scan_block(&vk, &block(11, [0u8; 32], vec![t]));
-        assert_eq!(found, vec![Detected { div_index: j, pool: Pool::Ironwood, txid: [3; 32], output_index: 0, value_zat: 12_500_000 }]);
+        assert_eq!(
+            found,
+            vec![Detected {
+                div_index: j,
+                pool: Pool::Ironwood,
+                txid: [3; 32],
+                output_index: 0,
+                value_zat: 12_500_000
+            }]
+        );
+
+        // A stranger's Ironwood output is not ours.
+        let other = zcash_keys::keys::UnifiedSpendingKey::from_seed(
+            &Network::TestNetwork,
+            &[9u8; 32],
+            zip32::AccountId::ZERO,
+        )
+        .unwrap()
+        .to_unified_full_viewing_key();
+        let (oa, _) = ViewingKey::from_ufvk(Network::TestNetwork, other)
+            .unwrap()
+            .invoice_address(0)
+            .unwrap();
+        let mut t = tx(5, vec![], vec![]);
+        t.ironwood_actions = vec![ironwood_action(decode_ua(&oa).orchard().unwrap(), 7)];
+        assert!(scan_block(&vk, &block(13, [0u8; 32], vec![t])).is_empty());
 
         // Plaintext versions are domain-bound: an Orchard (v2) note placed in
         // the Ironwood list, or an Ironwood (v3) note in the Orchard list, is not accepted.
@@ -350,8 +477,19 @@ pub(crate) mod tests {
     #[test]
     fn malformed_outputs_are_skipped() {
         let vk = ViewingKey::from_ufvk(Network::TestNetwork, test_ufvk()).unwrap();
-        let bad = CompactSaplingOutput { cmu: vec![1, 2, 3], ephemeral_key: vec![], ciphertext: vec![] };
-        let bad_a = CompactOrchardAction { nullifier: vec![0; 3], cmx: vec![], ephemeral_key: vec![], ciphertext: vec![] };
-        assert!(scan_block(&vk, &block(1, [0; 32], vec![tx(1, vec![bad], vec![bad_a])])).is_empty());
+        let bad = CompactSaplingOutput {
+            cmu: vec![1, 2, 3],
+            ephemeral_key: vec![],
+            ciphertext: vec![],
+        };
+        let bad_a = CompactOrchardAction {
+            nullifier: vec![0; 3],
+            cmx: vec![],
+            ephemeral_key: vec![],
+            ciphertext: vec![],
+        };
+        assert!(
+            scan_block(&vk, &block(1, [0; 32], vec![tx(1, vec![bad], vec![bad_a])])).is_empty()
+        );
     }
 }

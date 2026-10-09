@@ -48,9 +48,10 @@ async fn scans_real_testnet_blocks_with_hash_chain_continuity() {
     assert_eq!(row.received_zat, 0, "fresh key must not receive anything");
     let mempool = lwd.mempool().await.unwrap();
     println!(
-        "testnet tip {tip}: scanned {} blocks, trial-decrypted {outputs} shielded outputs, mempool {} txs; invoice address {}",
+        "testnet tip {tip}: scanned {} blocks, trial-decrypted {outputs} shielded outputs, mempool {} txs ({} Ironwood actions); invoice address {}",
         blocks.len(),
         mempool.len(),
+        mempool.iter().map(|t| t.ironwood_actions.len()).sum::<usize>(),
         row.address
     );
 }

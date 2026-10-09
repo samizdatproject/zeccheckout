@@ -33,16 +33,16 @@ The invoice is for 0.01 because the demo shop has fixed prices and the faucet al
 | 09:47:18.54 | `status change from="pending" to="paid"` (by then about 25 confirmations) | `testnet-zeccheckout.log` |
 | 09:47:20.32 | Shop: `signature verified; payment confirmed; order fulfilled` (1.8 s after `paid`) | `testnet-demo-shop.log` |
 
-The mempool hint ("payment seen") and the `detected` state were not shown live in this run. The transaction was mined and confirmed before the fixed scanner was running, so ZecCheckout went straight from `pending` to `paid` on the rescan. The fixed binary now also requests the Ironwood pool in `GetMempoolStream`, so the next run should show both.
+The mempool hint ("payment seen") and the `detected` state were not shown live in this run. The transaction was mined and confirmed before the fixed scanner was running, so ZecCheckout went straight from `pending` to `paid` on the rescan. The fixed binary now also sees Ironwood actions in the mempool stream, so the next run should show both.
 
 ## What the run found and fixed
 
-NU6.3 is active on testnet. The faucet's wallet holds its funds in the new Ironwood pool, so its payment to a Unified Address went to the address's Orchard receiver inside an Ironwood bundle. Ironwood notes use the Orchard key structure with a v3 note plaintext. Before the fix, ZecCheckout:
+NU6.3 is active on testnet (from height 4,134,000) and on mainnet (from height 3,428,143; the mainnet tip was 3,511,638 on 2026-10-09). Since NU6.3, consensus restricts Orchard bundles so that they cannot pay other addresses, only the sender's own change. So a payment to a Unified Address's Orchard receiver is always an Ironwood output, from any wallet. This is a protocol rule, not a quirk of the faucet. Ironwood notes use the Orchard key structure with a v3 note plaintext. Before the fix, ZecCheckout:
 
 - read only `outputs` (Sapling) and `actions` (Orchard) from compact transactions, ignoring `ironwood_actions`, and
 - asked lightwalletd only for the Sapling and Orchard pools.
 
-The fix (commit `2165490`, `src/scanner.rs`) trial-decrypts `ironwood_actions` with the same Orchard IVK under `IronwoodDomain`, records hits as pool `ironwood`, and requests `PoolType::Ironwood` for both blocks and the mempool. A new unit test encrypts a real v3 note to an invoice address and checks that it is detected. It also checks that a v2 note placed in the Ironwood list, or a v3 note in the Orchard list, is rejected. `zeccheckout scan 4481341 4481341` with the fixed binary prints:
+The fix (commit `2165490`, `src/scanner.rs`) trial-decrypts `ironwood_actions` with the same Orchard IVK under `IronwoodDomain`, records hits as pool `ironwood`, and requests every shielded pool from lightwalletd for both blocks and the mempool. It sends an empty `pool_types` list, which the protocol defines as Sapling + Orchard + Ironwood, so older lightwalletd servers that don't know the Ironwood pool type do not reject the request. A new unit test encrypts a real v3 note to an invoice address and checks that it is detected. It also checks that a v2 note placed in the Ironwood list, or a v3 note in the Orchard list, is rejected. `zeccheckout scan 4481341 4481341` with the fixed binary prints:
 
 ```
 height=4481341 pool=ironwood diversifier_index=1000004 value_zat=12500000

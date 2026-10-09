@@ -26,14 +26,14 @@ Merchants run one small Rust binary next to their shop. Their backend calls `POS
 ## Execution
 
 - Rust, on the official librustzcash crates (`zcash_keys`, `zip321`, `orchard`, `sapling-crypto`, `zcash_client_backend` gRPC/protos).
-- 24 automated tests incl. real Sapling/Orchard/Ironwood note encryption to invoice addresses, reorg handling, and an HTTP end-to-end test through to a verified signed webhook; a live test scans 1,500 real testnet blocks with hash-chain verification. `cargo clippy` clean.
+- 26 automated tests incl. real Sapling/Orchard/Ironwood note encryption to invoice addresses, reorg handling, and an HTTP end-to-end test through to a verified signed webhook; a live test scans 1,500 real testnet blocks with hash-chain verification. `cargo clippy` clean.
 - Hardening found by tests: malformed compact outputs from a hostile lightwalletd would panic upstream conversions — ZecCheckout validates lengths first.
 
 ## Proven on testnet with a real wallet payment
 
 On 2026-10-09 the Valar testnet faucet (a real zecd wallet, no memo) paid 0.125 TAZ to a demo-shop invoice address. Txid: `24dcd0354daac6af940e63bcf8275e2cbbbf6bf3c8c9f0be111a0338863f5404`, block 4481341. ZecCheckout matched the payment by diversifier index and marked invoice `3267a523…` paid. The shop verified the signed `invoice.paid` webhook 1.8 s later and fulfilled the order.
 
-The run also found a real bug. NU6.3 is active on testnet, and the faucet pays from the new Ironwood pool, which the scanner was not reading. It was fixed the same day (Ironwood actions are trial-decrypted with the Orchard IVK under the v3 domain, with a test), and the rescan detected the payment. Full timeline, logs and screenshots: [`docs/demo/TESTNET_RUN.md`](demo/TESTNET_RUN.md).
+The run also found a real bug. Since NU6.3, which is active on testnet and on mainnet, every payment to an Orchard receiver arrives as an Ironwood output. That is a consensus rule. The scanner was not reading the Ironwood pool. It was fixed the same day (Ironwood actions are trial-decrypted with the Orchard IVK under the v3 domain, with a test), and the rescan detected the payment. Full timeline, logs and screenshots: [`docs/demo/TESTNET_RUN.md`](demo/TESTNET_RUN.md).
 
 ![Checkout page: paid](demo/testnet-checkout-paid.png)
 ![Demo shop: order fulfilled on the verified webhook](demo/testnet-shop-order-fulfilled.png)
