@@ -37,7 +37,7 @@ async fn scans_real_testnet_blocks_with_hash_chain_continuity() {
     assert_eq!(blocks.len() as u64, tip - from + 1);
     let mut outputs = 0usize;
     for b in &blocks {
-        outputs += b.vtx.iter().map(|t| t.outputs.len() + t.actions.len()).sum::<usize>();
+        outputs += b.vtx.iter().map(|t| t.outputs.len() + t.actions.len() + t.ironwood_actions.len()).sum::<usize>();
         // apply_block checks prev_hash against the stored previous hash, so
         // this verifies real chain continuity across all 1500 blocks.
         app.apply_block(b).unwrap_or_else(|e| panic!("block {}: {e}", b.height));

@@ -92,7 +92,7 @@ async fn scan_range(from: u64, to: u64) -> Result<()> {
         let end = (h + 499).min(to);
         for b in lwd.blocks(h, end).await? {
             blocks += 1;
-            outputs += b.vtx.iter().map(|t| (t.outputs.len() + t.actions.len()) as u64).sum::<u64>();
+            outputs += b.vtx.iter().map(|t| (t.outputs.len() + t.actions.len() + t.ironwood_actions.len()) as u64).sum::<u64>();
             for d in scanner::scan_block(&vk, &b) {
                 found += 1;
                 println!(

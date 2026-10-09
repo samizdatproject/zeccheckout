@@ -1,5 +1,5 @@
-//! Compact-block scanning: trial-decrypt Sapling outputs and Orchard actions
-//! with the viewing key's external IVKs, and fetch blocks from lightwalletd.
+//! Compact-block scanning: trial-decrypt Sapling outputs and Orchard/Ironwood
+//! actions with the viewing key's external IVKs, and fetch blocks from lightwalletd.
 //!
 //! Only *compact* blocks are downloaded, and always the full block range, so
 //! the lightwalletd operator learns nothing about which transactions are
@@ -10,7 +10,7 @@
 use anyhow::{anyhow, Context, Result};
 use std::time::Duration;
 use tonic::transport::{Channel, ClientTlsConfig, Endpoint};
-use zcash_client_backend::proto::compact_formats::{CompactBlock, CompactTx};
+use zcash_client_backend::proto::compact_formats::{CompactBlock, CompactOrchardAction, CompactTx};
 use zcash_client_backend::proto::service::{
     compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange, ChainSpec,
     GetMempoolTxRequest, PoolType,
@@ -23,6 +23,7 @@ use crate::keys::ViewingKey;
 pub enum Pool {
     Sapling,
     Orchard,
+    Ironwood,
 }
 
 impl Pool {
@@ -30,6 +31,7 @@ impl Pool {
         match self {
             Pool::Sapling => "sapling",
             Pool::Orchard => "orchard",
+            Pool::Ironwood => "ironwood",
         }
     }
 }
@@ -83,32 +85,36 @@ pub fn scan_tx(vk: &ViewingKey, tx: &CompactTx) -> Vec<Detected> {
     }
 
     if let Some(ivk) = vk.orchard_ivk() {
-        for (i, a) in tx.actions.iter().enumerate() {
-            if a.nullifier.len() != 32
-                || a.cmx.len() != 32
-                || a.ephemeral_key.len() != 32
-                || a.ciphertext.len() != COMPACT_NOTE_SIZE
-            {
-                continue;
-            }
-            let Ok(action) = orchard::note_encryption::CompactAction::try_from(a) else {
-                continue;
-            };
-            let domain = orchard::note_encryption::OrchardDomain::for_compact_action(&action);
-            if let Some((note, addr)) = try_compact_note_decryption(&domain, ivk, &action) {
-                if let Some(j) = vk.orchard_index(&addr) {
-                    out.push(Detected {
-                        div_index: j,
-                        pool: Pool::Orchard,
-                        txid,
-                        output_index: i as u32,
-                        value_zat: note.value().inner(),
-                    });
-                }
+        // Ironwood (NU6.3+) actions are Orchard-shaped and decrypt with the
+        // same Orchard IVK, but under the Ironwood (v3 plaintext) domain.
+        scan_actions::<orchard::note_encryption::OrchardVersion>(vk, ivk, &tx.actions, Pool::Orchard, txid, &mut out);
+        scan_actions::<orchard::note_encryption::IronwoodVersion>(vk, ivk, &tx.ironwood_actions, Pool::Ironwood, txid, &mut out);
+    }
+    out
+}
+
+fn scan_actions<V: orchard::note_encryption::DomainVersion>(
+    vk: &ViewingKey,
+    ivk: &orchard::keys::PreparedIncomingViewingKey,
+    actions: &[CompactOrchardAction],
+    pool: Pool,
+    txid: [u8; 32],
+    out: &mut Vec<Detected>,
+) {
+    for (i, a) in actions.iter().enumerate() {
+        if a.nullifier.len() != 32 || a.cmx.len() != 32 || a.ephemeral_key.len() != 32 || a.ciphertext.len() != COMPACT_NOTE_SIZE {
+            continue;
+        }
+        let Ok(action) = orchard::note_encryption::CompactAction::try_from(a) else {
+            continue;
+        };
+        let domain = orchard::note_encryption::NoteEncryptionDomain::<V>::for_compact_action(&action);
+        if let Some((note, addr)) = try_compact_note_decryption(&domain, ivk, &action) {
+            if let Some(j) = vk.orchard_index(&addr) {
+                out.push(Detected { div_index: j, pool, txid, output_index: i as u32, value_zat: note.value().inner() });
             }
         }
     }
-    out
 }
 
 pub fn scan_block(vk: &ViewingKey, block: &CompactBlock) -> Vec<Detected> {
@@ -148,7 +154,7 @@ impl Lightwalletd {
         let req = BlockRange {
             start: Some(BlockId { height: start, hash: vec![] }),
             end: Some(BlockId { height: end, hash: vec![] }),
-            pool_types: vec![PoolType::Sapling as i32, PoolType::Orchard as i32],
+            pool_types: vec![PoolType::Sapling as i32, PoolType::Orchard as i32, PoolType::Ironwood as i32],
         };
         let mut stream = self.client.get_block_range(req).await?.into_inner();
         let mut out = Vec::with_capacity((end + 1).saturating_sub(start) as usize);
@@ -169,7 +175,7 @@ impl Lightwalletd {
     pub async fn mempool(&mut self) -> Result<Vec<CompactTx>> {
         let req = GetMempoolTxRequest {
             exclude_txid_suffixes: vec![],
-            pool_types: vec![PoolType::Sapling as i32, PoolType::Orchard as i32],
+            pool_types: vec![PoolType::Sapling as i32, PoolType::Orchard as i32, PoolType::Ironwood as i32],
         };
         let mut stream = self.client.get_mempool_tx(req).await?.into_inner();
         let mut out = Vec::new();
@@ -211,6 +217,18 @@ pub(crate) mod tests {
     }
 
     pub fn orchard_action(addr: &orchard::Address, value: u64) -> CompactOrchardAction {
+        action_with::<orchard::note_encryption::OrchardVersion>(addr, value, orchard::note::NoteVersion::V2)
+    }
+
+    pub fn ironwood_action(addr: &orchard::Address, value: u64) -> CompactOrchardAction {
+        action_with::<orchard::note_encryption::IronwoodVersion>(addr, value, orchard::note::NoteVersion::V3)
+    }
+
+    fn action_with<V: orchard::note_encryption::DomainVersion>(
+        addr: &orchard::Address,
+        value: u64,
+        version: orchard::note::NoteVersion,
+    ) -> CompactOrchardAction {
         // rho must be a valid Pallas base element; the nullifier field of the
         // compact action carries it.
         let (rho_bytes, rho, note) = loop {
@@ -230,15 +248,15 @@ pub(crate) mod tests {
                 orchard::value::NoteValue::from_raw(value),
                 rho,
                 rseed,
-                orchard::note::NoteVersion::V2,
+                version,
             )) else {
                 continue;
             };
             break (rb, rho, note);
         };
         let _ = rho;
-        let enc = NoteEncryption::<orchard::note_encryption::OrchardDomain>::new(None, note, [0u8; 512]);
-        let epk = orchard::note_encryption::OrchardDomain::epk_bytes(enc.epk());
+        let enc = NoteEncryption::<orchard::note_encryption::NoteEncryptionDomain<V>>::new(None, note, [0u8; 512]);
+        let epk = orchard::note_encryption::NoteEncryptionDomain::<V>::epk_bytes(enc.epk());
         let ct = enc.encrypt_note_plaintext();
         let cmx = orchard::note::ExtractedNoteCommitment::from(note.commitment());
         CompactOrchardAction {
@@ -308,6 +326,25 @@ pub(crate) mod tests {
         assert_eq!(found[1], Detected { div_index: j2, pool: Pool::Orchard, txid: [2; 32], output_index: 0, value_zat: 12345 });
         // The stranger sees exactly their own two outputs.
         assert_eq!(scan_block(&other_vk, &b).len(), 2);
+    }
+
+    #[test]
+    fn detects_ironwood_actions_with_the_orchard_ivk() {
+        // NU6.3 testnet wallets (e.g. the Valar faucet) pay Unified Addresses
+        // from the Ironwood pool, to the address's Orchard receiver.
+        let vk = ViewingKey::from_ufvk(Network::TestNetwork, test_ufvk()).unwrap();
+        let (a, j) = vk.invoice_address(200).unwrap();
+        let ua = decode_ua(&a);
+        let mut t = tx(3, vec![], vec![]);
+        t.ironwood_actions = vec![ironwood_action(ua.orchard().unwrap(), 12_500_000)];
+        let found = scan_block(&vk, &block(11, [0u8; 32], vec![t]));
+        assert_eq!(found, vec![Detected { div_index: j, pool: Pool::Ironwood, txid: [3; 32], output_index: 0, value_zat: 12_500_000 }]);
+
+        // Plaintext versions are domain-bound: an Orchard (v2) note placed in
+        // the Ironwood list, or an Ironwood (v3) note in the Orchard list, is not accepted.
+        let mut swapped = tx(4, vec![], vec![ironwood_action(ua.orchard().unwrap(), 1)]);
+        swapped.ironwood_actions = vec![orchard_action(ua.orchard().unwrap(), 1)];
+        assert!(scan_block(&vk, &block(12, [0u8; 32], vec![swapped])).is_empty());
     }
 
     #[test]
