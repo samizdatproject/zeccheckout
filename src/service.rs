@@ -198,23 +198,35 @@ impl App {
             if !changed {
                 continue;
             }
-            let paid_at = (ev.status == Status::Paid).then_some(now);
-            self.db.update_invoice_state(
-                &inv.id,
-                ev.status,
-                ev.received_zat,
-                ev.confirmed_zat,
-                paid_at,
-                ev.paid_height,
-            )?;
-            if ev.status != inv.status {
-                tracing::info!(invoice = %inv.id, from = inv.status.as_str(), to = ev.status.as_str(), "status change");
-                let updated = self.db.get_invoice(&inv.id)?.expect("exists");
-                let event = format!("invoice.{}", ev.status.as_str());
-                let seq = self.db.next_webhook_seq(&inv.id)?;
-                let body = webhook_body(&event, &updated, seq, now);
-                self.db.enqueue_webhook(&inv.id, &event, &body, now)?;
-                changes.push((inv.id.clone(), ev.status));
+            // When one scan step covers the payment and its confirmations
+            // (fast blocks, catch-up after downtime), still pass through
+            // `detected` so merchants always see detected -> paid.
+            let steps: &[Status] = if ev.status == Status::Paid && !matches!(inv.status, Status::Detected | Status::Paid) {
+                &[Status::Detected, Status::Paid]
+            } else {
+                std::slice::from_ref(&ev.status)
+            };
+            let mut from = inv.status;
+            for &to in steps {
+                let paid = to == Status::Paid;
+                self.db.update_invoice_state(
+                    &inv.id,
+                    to,
+                    ev.received_zat,
+                    ev.confirmed_zat,
+                    paid.then_some(now),
+                    if paid { ev.paid_height } else { None },
+                )?;
+                if to != from {
+                    tracing::info!(invoice = %inv.id, from = from.as_str(), to = to.as_str(), "status change");
+                    let updated = self.db.get_invoice(&inv.id)?.expect("exists");
+                    let event = format!("invoice.{}", to.as_str());
+                    let seq = self.db.next_webhook_seq(&inv.id)?;
+                    let body = webhook_body(&event, &updated, seq, now);
+                    self.db.enqueue_webhook(&inv.id, &event, &body, now)?;
+                    changes.push((inv.id.clone(), to));
+                    from = to;
+                }
             }
         }
         Ok(changes)
@@ -466,6 +478,40 @@ mod tests {
         assert!(app.db.received_for(&inv.id).unwrap().is_empty());
         app.refresh(202, 2).unwrap();
         assert_eq!(app.db.get_invoice(&inv.id).unwrap().unwrap().status, Status::Pending);
+    }
+
+    #[test]
+    fn payment_confirmed_within_one_step_still_emits_detected_then_paid() {
+        let app = app();
+        let inv = app.create_invoice(CreateInvoice { amount_zat: 1000, order_id: None, description: None, expires_in_secs: None }, 0).unwrap();
+        let ua = decode_ua(&inv.address);
+        let b1 = block(500, [0; 32], vec![]);
+        app.apply_block(&b1).unwrap();
+        app.refresh(500, 1).unwrap();
+        // Payment and two more blocks arrive before the next refresh (fast
+        // testnet blocks): 3 confirmations at once.
+        let mut t = tx(9, vec![], vec![]);
+        t.ironwood_actions = vec![ironwood_action(ua.orchard().unwrap(), 1500)];
+        let b2 = block(501, hash_of(&b1), vec![t]);
+        app.apply_block(&b2).unwrap();
+        let b3 = block(502, hash_of(&b2), vec![]);
+        app.apply_block(&b3).unwrap();
+        let b4 = block(503, hash_of(&b3), vec![]);
+        app.apply_block(&b4).unwrap();
+        assert_eq!(app.refresh(503, 7).unwrap(), vec![(inv.id.clone(), Status::Detected), (inv.id.clone(), Status::Paid)]);
+        let row = app.db.get_invoice(&inv.id).unwrap().unwrap();
+        assert_eq!((row.status, row.paid_at, row.paid_height, row.received_zat), (Status::Paid, Some(7), Some(501), 1500));
+
+        let mut bodies = Vec::new();
+        while let Some(w) = app.db.due_webhooks(100).unwrap().into_iter().next() {
+            bodies.push(serde_json::from_str::<serde_json::Value>(&w.body).unwrap());
+            app.db.mark_webhook_delivered(w.id, 100).unwrap();
+        }
+        let ev: Vec<_> = bodies.iter().map(|b| (b["event"].as_str().unwrap().to_owned(), b["seq"].as_u64().unwrap(), b["invoice"]["status"].as_str().unwrap().to_owned())).collect();
+        assert_eq!(ev, [("invoice.detected".into(), 1, "detected".into()), ("invoice.paid".into(), 2, "paid".into())]);
+        assert!(bodies[0]["invoice"]["paid_at"].is_null());
+        // Nothing more on the next refresh.
+        assert!(app.refresh(503, 8).unwrap().is_empty());
     }
 
     #[test]

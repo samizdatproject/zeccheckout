@@ -26,7 +26,7 @@ Merchants run one small Rust binary next to their shop. Their backend calls `POS
 ## Execution
 
 - Rust, on the official librustzcash crates (`zcash_keys`, `zip321`, `orchard`, `sapling-crypto`, `zcash_client_backend` gRPC/protos).
-- 26 automated tests incl. real Sapling/Orchard/Ironwood note encryption to invoice addresses, reorg handling, and an HTTP end-to-end test through to a verified signed webhook; a live test scans 1,500 real testnet blocks with hash-chain verification. `cargo clippy` clean.
+- 27 automated tests incl. real Sapling/Orchard/Ironwood note encryption to invoice addresses, reorg handling, and an HTTP end-to-end test through to a verified signed webhook; a live test scans 1,500 real testnet blocks with hash-chain verification. `cargo clippy` clean.
 - Hardening found by tests: malformed compact outputs from a hostile lightwalletd would panic upstream conversions — ZecCheckout validates lengths first.
 
 ## Proven on testnet with a real wallet payment

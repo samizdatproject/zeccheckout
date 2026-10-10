@@ -85,11 +85,11 @@ Invoice IDs are random 128-bit values.
 |---|---|
 | `pending` | Nothing received yet. |
 | `underpaid` | Some funds received, but less than the amount. |
-| `detected` | The full amount has been mined, with fewer than N confirmations. |
+| `detected` | The full amount has been mined, with fewer than N confirmations. A paid invoice always passes through `detected`, even when the payment already had N confirmations when it was first scanned (fast blocks, or catching up after downtime). In that case both events carry the same timestamp. |
 | `paid` | The full amount has at least N confirmations. This status is final. |
 | `expired` | The invoice expired with nothing received. Late payments are still credited. |
 
-The checkout page also shows "payment seen in mempool" as a hint for the customer. It never affects the invoice status.
+The checkout page also shows "payment seen in mempool" as a hint for the customer. It never affects the invoice status. The hint is best effort. The mempool is polled every `ZC_POLL_SECS` (default 15 s), and a public lightwalletd's mempool can miss transactions that are mined within seconds. In a 2026-10-10 sample, `testnet.zec.rocks` held 4 of the 17 mempool transactions that a Zakura testnet node held at the same moments.
 
 ## Embedding the widget
 
@@ -250,7 +250,7 @@ Outputs to other diversifier indices are ignored and not stored. This covers, fo
 ## Testing
 
 ```bash
-cargo test                                              # 26 unit + end-to-end tests, offline
+cargo test                                              # 27 unit + end-to-end tests, offline
 cargo test --test testnet_live -- --ignored --nocapture # live: scans 1500 real testnet blocks
 cargo clippy --all-targets                              # clean
 ```
