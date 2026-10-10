@@ -1,0 +1,28 @@
+# Block header times around the payment (Zakura testnet node RPC, getblock). Header time is set by the miner, not the arrival time.
+4485029 11:04:50Z 6 txs 
+4485030 11:05:32Z 5 txs 
+4485031 11:07:22Z 3 txs <- payment 98510eb2…
+4485032 11:07:55Z 1 txs 
+4485033 11:07:58Z 1 txs 
+4485034 11:08:11Z 1 txs 
+4485035 11:08:57Z 7 txs 
+
+# Arrival probe 11:11-11:15Z: first time each height was seen (3 s polling) at the Zakura node and at testnet.zec.rocks
+11:11:19 zakura 4485039
+11:11:19 zecrocks 4485039
+11:12:01 zakura 4485040
+11:12:09 zecrocks 4485040
+11:12:52 zakura 4485041
+11:12:56 zecrocks 4485041
+11:13:08 zakura 4485042
+11:13:17 zecrocks 4485042
+11:13:39 zakura 4485043
+11:13:43 zakura 4485044
+11:13:43 zecrocks 4485043
+11:13:52 zecrocks 4485044
+11:14:46 zakura 4485045
+11:14:50 zecrocks 4485045
+# Header times for those heights: 4485039 11:10:18, 4485040 11:10:42, 4485041 11:12:31, 4485042 11:12:48, 4485043 11:13:23, 4485044 11:13:35 -> arrival is 8-80 s after header time
+
+# Mempool sample 11:12:53-11:14:25Z (every ~18 s): Zakura node getrawmempool size vs testnet.zec.rocks GetMempoolTx size
+zakura 8 / lwd 0; zakura 1 / lwd 0; zakura 4 / lwd 1; zakura 0 / lwd 0; zakura 1 / lwd 0; zakura 4 / lwd 3

@@ -1,0 +1,2 @@
+11:07:20Z claim: {"id":"839573b8ba840f816adf55aa25436045","status":"queued","amount":"0.125","broadcastOk":0,"broadcastNodes":3,"createdAt":1791630440}
+11:16:14Z claim status (fetched afterwards): {"id":"839573b8ba840f816adf55aa25436045","status":"sent","amount":"0.125","txid":"98510eb24fcd5eae6aa93e6e2cf1ae718d25d8ad143894bb2096e36e22ba57d8","broadcastOk":3,"broadcastNodes":3,"createdAt":1791630440}

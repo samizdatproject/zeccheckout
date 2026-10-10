@@ -1,0 +1,9 @@
+# zeccheckout serve (commit 34daa27), testnet.zec.rocks, min_conf=3, poll 15 s. Lightwalletd transport-retry warnings omitted (51 lines).
+2026-10-09T14:22:34.378499Z  INFO starting ZecCheckout (viewing key only) network="testnet" lightwalletd=https://testnet.zec.rocks:443 min_conf=3
+2026-10-09T14:22:34.379280Z  WARN no ZC_WEBHOOK_URL configured; webhooks will be queued but not delivered
+2026-10-09T14:22:34.380214Z  INFO listening on http://127.0.0.1:8080
+2026-10-09T14:22:39.224046Z  INFO invoice created invoice=248f0c90f441e999e68e390d3d198d4d
+2026-10-09T14:34:45.763974Z  WARN chain reorganisation detected; rolling back at=4482079 rollback_to=4482059
+2026-10-10T10:24:02.249708Z  WARN chain reorganisation detected; rolling back at=4484945 rollback_to=4484925
+2026-10-10T11:08:17.305611Z  INFO payment output detected invoice=248f0c90f441e999e68e390d3d198d4d pool="ironwood"
+2026-10-10T11:08:17.313435Z  INFO status change invoice=248f0c90f441e999e68e390d3d198d4d from="pending" to="paid"

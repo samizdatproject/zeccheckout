@@ -33,7 +33,7 @@ The invoice is for 0.01 because the demo shop has fixed prices and the faucet al
 | 09:47:18.54 | `status change from="pending" to="paid"` (by then about 25 confirmations) | `testnet-zeccheckout.log` |
 | 09:47:20.32 | Shop: `signature verified; payment confirmed; order fulfilled` (1.8 s after `paid`) | `testnet-demo-shop.log` |
 
-The mempool hint ("payment seen") and the `detected` state were not shown live in this run. The transaction was mined and confirmed before the fixed scanner was running, so ZecCheckout went straight from `pending` to `paid` on the rescan. The fixed binary now also sees Ironwood actions in the mempool stream, so the next run should show both.
+The mempool hint ("payment seen") and the `detected` state were not shown live in this run. The transaction was mined and confirmed before the fixed scanner was running, so ZecCheckout went straight from `pending` to `paid` on the rescan. The fixed binary also sees Ironwood actions in the mempool stream. See run 2 for why the hint still did not appear.
 
 ## What the run found and fixed
 
@@ -48,8 +48,28 @@ The fix (commit `2165490`, `src/scanner.rs`) trial-decrypts `ironwood_actions` w
 height=4481341 pool=ironwood diversifier_index=1000004 value_zat=12500000
 ```
 
+## Run 2 (2026-10-10): live, with the fixed scanner
+
+This time the server was already running with the Ironwood fix (commit `34daa27`, `testnet.zec.rocks`, min_conf 3, poll 15 s). The invoice was created directly through the API: `248f0c90f441e999e68e390d3d198d4d`, 0.1 TAZ, "Espresso (live faucet demo)". The faucet paid 0.125.
+
+| Time (UTC) | Event | Source |
+|---|---|---|
+| 11:07:20 | Faucet claim `839573b8…` accepted; checkout page shows "Waiting for payment" | `live/faucet-claim.log`, `live/checkout-pending.png` |
+| (seconds later) | Faucet `sent`, txid `98510eb24fcd5eae6aa93e6e2cf1ae718d25d8ad143894bb2096e36e22ba57d8`, 3/3 nodes | `live/faucet-claim.log` |
+| 11:07:22 | Header time of block 4485031, which contains the tx | `live/chain-analysis.txt` |
+| 11:07:55 / 11:07:58 | Header times of 4485032 and 4485033 (3 confirmations) | `live/chain-analysis.txt` |
+| 11:08:17.306 | `payment output detected … pool="ironwood"`, with no restart or rescan | `live/zeccheckout.log` |
+| 11:08:17.313 | `status change from="pending" to="paid"` | `live/zeccheckout.log` |
+| 11:08:18 | Checkout page shows "Paid — thank you! 0.125 ZEC confirmed." | `live/poller-timeline.log`, `live/checkout-paid.png` |
+
+The payment was detected live, 57 s after the claim, and needed no intervention. Two things did not show up, and neither is a ZecCheckout bug:
+
+- **No `detected` state.** Testnet produced blocks 4485031–4485033 within about 36 s of header time. Header times run 8–80 s ahead of arrival (measured in `live/chain-analysis.txt`), so the three blocks reached lightwalletd close together. One 15 s scan step therefore saw the payment already at 3 confirmations. Commit `19c7cbc` now records `detected` and then `paid` in that case. The webhooks are `invoice.detected` (seq n) then `invoice.paid` (seq n+1), with the same timestamp. A checkout page that polls every 2 s still jumps from pending to paid.
+- **No mempool hint.** The faucet pushes its transaction straight to the Zakura nodes, which mine it, and the transaction was in a block within seconds. `testnet.zec.rocks` also misses most mempool transactions: in a sample taken just after the run, it held 4 of the 18 transactions a Zakura node held at the same moments. The mempool request does return Ironwood (33 actions seen in one snapshot), so the code path works; the faucet's transaction simply never reached that mempool while it was being polled.
+
 ## Files
 
+- `live/`: run 2 files: `checkout-pending.png`, `checkout-paid.png`, `zeccheckout.log`, `faucet-claim.log`, `poller-timeline.log`, `chain-analysis.txt` (block header times, an arrival probe, a mempool comparison).
 - `testnet-checkout-paid.png`: hosted checkout page `/pay/{id}` showing "Paid — thank you! 0.125 ZEC confirmed." (headless Chrome).
 - `testnet-shop-order-fulfilled.png`: demo shop order page, with "PAID — order fulfilled ✓ (verified webhook)" next to the embedded widget.
 - `testnet-zeccheckout.log`: server log for both runs (ANSI stripped; repeated DNS-retry warnings collapsed).

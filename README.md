@@ -89,7 +89,7 @@ Invoice IDs are random 128-bit values.
 | `paid` | The full amount has at least N confirmations. This status is final. |
 | `expired` | The invoice expired with nothing received. Late payments are still credited. |
 
-The checkout page also shows "payment seen in mempool" as a hint for the customer. It never affects the invoice status. The hint is best effort. The mempool is polled every `ZC_POLL_SECS` (default 15 s), and a public lightwalletd's mempool can miss transactions that are mined within seconds. In a 2026-10-10 sample, `testnet.zec.rocks` held 4 of the 17 mempool transactions that a Zakura testnet node held at the same moments.
+The checkout page also shows "payment seen in mempool" as a hint for the customer. It never affects the invoice status. The hint is best effort. The mempool is polled every `ZC_POLL_SECS` (default 15 s), and a public lightwalletd's mempool can miss transactions that are mined within seconds. In a 2026-10-10 sample, `testnet.zec.rocks` held 4 of the 18 mempool transactions that a Zakura testnet node held at the same moments.
 
 ## Embedding the widget
 
