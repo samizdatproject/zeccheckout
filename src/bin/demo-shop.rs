@@ -9,7 +9,8 @@
 //!    status.
 //!
 //! Env: SHOP_BIND (127.0.0.1:8081), SHOP_CHECKOUT_URL (http://127.0.0.1:8080),
-//!      SHOP_API_KEY, SHOP_WEBHOOK_SECRET.
+//!      SHOP_API_KEY, SHOP_WEBHOOK_SECRET, SHOP_PUBLIC_URL (public origin behind a
+//!      TLS proxy; defaults to RENDER_EXTERNAL_URL on Render).
 
 use anyhow::{anyhow, Context, Result};
 use axum::{
@@ -53,6 +54,9 @@ struct Order {
 struct Shop {
     orders: Mutex<HashMap<String, Order>>,
     checkout_url: String,
+    /// Public origin(s) of this shop as browsers see it (behind a TLS proxy the
+    /// Host header is not enough), from SHOP_PUBLIC_URL / RENDER_EXTERNAL_URL.
+    public_origins: Vec<String>,
     api_key: String,
     webhook_secret: String,
     http: reqwest::Client,
@@ -74,6 +78,12 @@ async fn main() -> Result<()> {
     let shop = Arc::new(Shop {
         orders: Mutex::new(HashMap::new()),
         checkout_url: env("SHOP_CHECKOUT_URL", Some("http://127.0.0.1:8080"))?.trim_end_matches('/').to_owned(),
+        public_origins: ["SHOP_PUBLIC_URL", "RENDER_EXTERNAL_URL"]
+            .iter()
+            .filter_map(|k| std::env::var(k).ok())
+            .map(|v| v.trim().trim_end_matches('/').to_owned())
+            .filter(|v| !v.is_empty())
+            .collect(),
         api_key: env("SHOP_API_KEY", None)?,
         webhook_secret: env("SHOP_WEBHOOK_SECRET", None)?,
         http: reqwest::Client::new(),
@@ -152,7 +162,7 @@ async fn buy(State(shop): St, headers: HeaderMap, Form(f): Form<BuyForm>) -> Res
     // Minimal CSRF defence: browsers send Origin on cross-site POSTs.
     if let Some(origin) = headers.get(header::ORIGIN).and_then(|v| v.to_str().ok()) {
         let host = headers.get(header::HOST).and_then(|v| v.to_str().ok()).unwrap_or_default();
-        if origin != format!("http://{host}") && origin != format!("https://{host}") {
+        if !same_origin(origin, host, &shop.public_origins) {
             return (StatusCode::FORBIDDEN, "cross-origin request refused").into_response();
         }
     }
@@ -187,6 +197,14 @@ async fn buy(State(shop): St, headers: HeaderMap, Form(f): Form<BuyForm>) -> Res
     );
     tracing::info!(order = %order_id, product = product.id, "order created");
     Redirect::to(&format!("/order/{order_id}")).into_response()
+}
+
+/// Minimal CSRF check: the request's Origin must be this shop. Behind a TLS
+/// proxy (e.g. Render) the Host header may not be the public host, so the
+/// configured public origins are accepted too.
+fn same_origin(origin: &str, host: &str, public_origins: &[String]) -> bool {
+    public_origins.iter().any(|o| o == origin)
+        || (!host.is_empty() && (origin == format!("http://{host}") || origin == format!("https://{host}")))
 }
 
 /// Shown when the checkout service is unreachable or answers with something
@@ -259,5 +277,23 @@ async fn webhook_rx(State(shop): St, headers: HeaderMap, body: Bytes) -> Respons
             StatusCode::NO_CONTENT.into_response()
         }
         _ => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::same_origin;
+
+    #[test]
+    fn origin_check_accepts_public_url_behind_proxy() {
+        let public = vec!["https://zeccheckout-shop.onrender.com".to_owned()];
+        // Behind Render's proxy the Host header is not the public host.
+        assert!(same_origin("https://zeccheckout-shop.onrender.com", "10.0.0.7:10000", &public));
+        // Local use: Origin matches Host.
+        assert!(same_origin("http://127.0.0.1:8081", "127.0.0.1:8081", &[]));
+        // Cross-site posts are refused.
+        assert!(!same_origin("https://evil.example", "10.0.0.7:10000", &public));
+        assert!(!same_origin("https://zeccheckout-shop.onrender.com.evil.example", "x", &public));
+        assert!(!same_origin("null", "", &[]));
     }
 }
