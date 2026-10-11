@@ -30,6 +30,18 @@ fn env_parse<T: std::str::FromStr>(key: &str, default: T) -> Result<T> {
     }
 }
 
+/// First diversifier index for invoice addresses. `boot` is for hosts without
+/// persistent storage (the database is lost on restart): each boot starts in a
+/// fresh range above every earlier boot, so a late payment to an invoice from
+/// a previous boot can never be credited to a new invoice.
+fn diversifier_start(value: Option<&str>, now: u64) -> Result<u64> {
+    match value.map(str::trim) {
+        None => Ok(1_000_000),
+        Some("boot") => Ok(1_000_000 + now * 1000),
+        Some(v) => v.parse().map_err(|_| anyhow!("invalid value for ZC_DIVERSIFIER_START")),
+    }
+}
+
 fn load_vk() -> Result<ViewingKey> {
     let network = parse_network(&env("ZC_NETWORK").unwrap_or_else(|| "testnet".into()))?;
     let ufvk = match (env("ZC_UFVK"), env("ZC_UFVK_FILE")) {
@@ -119,12 +131,14 @@ async fn serve() -> Result<()> {
     let settings = Settings {
         min_confirmations: env_parse("ZC_MIN_CONFIRMATIONS", 3u64)?.max(1),
         default_expiry_secs: env_parse("ZC_INVOICE_TTL_SECS", 3600u64)?,
-        diversifier_start: env_parse("ZC_DIVERSIFIER_START", 1_000_000u64)?,
+        diversifier_start: diversifier_start(env("ZC_DIVERSIFIER_START").as_deref(), zeccheckout::service::now())?,
         include_memo: env_parse("ZC_INCLUDE_MEMO", false)?,
         merchant_name: env("ZC_MERCHANT_NAME"),
     };
     let bind = env("ZC_BIND").unwrap_or_else(|| "127.0.0.1:8080".into());
+    // RENDER_EXTERNAL_URL: the public https URL Render.com gives a web service.
     let public_url = env("ZC_PUBLIC_URL")
+        .or_else(|| env("RENDER_EXTERNAL_URL"))
         .unwrap_or_else(|| format!("http://{bind}"))
         .trim_end_matches('/')
         .to_string();
@@ -168,4 +182,21 @@ async fn serve() -> Result<()> {
         })
         .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::diversifier_start;
+
+    #[test]
+    fn diversifier_start_modes() {
+        assert_eq!(diversifier_start(None, 5).unwrap(), 1_000_000);
+        assert_eq!(diversifier_start(Some("42"), 5).unwrap(), 42);
+        assert!(diversifier_start(Some("x"), 5).is_err());
+        // Later boots start above anything an earlier boot could have used
+        // (up to 1000 invoices per second of uptime).
+        let a = diversifier_start(Some("boot"), 1_791_700_000).unwrap();
+        let b = diversifier_start(Some(" boot "), 1_791_700_001).unwrap();
+        assert!(b >= a + 1000);
+    }
 }

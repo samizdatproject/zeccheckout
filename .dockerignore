@@ -1,0 +1,10 @@
+target
+.git
+.github
+.omc
+docs
+tests
+*.db
+*.db-*
+.env
+*seed*.txt

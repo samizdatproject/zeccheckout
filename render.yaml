@@ -1,0 +1,70 @@
+# Render.com Blueprint: public TESTNET demo of ZecCheckout and the demo shop.
+# Both services pull the prebuilt image ghcr.io/samizdatproject/zeccheckout:latest
+# (built by .github/workflows/image.yml), so Render does not compile Rust.
+#
+# Free plan: 0.1 CPU / 512 MB, no persistent disk, spins down after 15 min
+# without traffic (cold start ~1 min). The SQLite database and the shop's
+# orders live in memory/ephemeral disk and reset on every restart; that is
+# fine for a demo and documented in the README.
+#
+# The two services must know each other's PUBLIC URL (free services cannot use
+# Render's private network). Render normally assigns https://<name>.onrender.com;
+# if a name is taken it adds a suffix. After the first deploy, compare the URLs
+# in the dashboard with the three *_URL / FRAME_ANCESTORS values below and fix
+# them there if they differ.
+services:
+  - type: web
+    name: zeccheckout-pay
+    runtime: image
+    plan: free
+    image:
+      url: ghcr.io/samizdatproject/zeccheckout:latest
+    healthCheckPath: /healthz
+    envVars:
+      - key: ZC_NETWORK
+        value: testnet
+      # Throwaway TESTNET viewing key (uviewtest1...). Pasted once in the dashboard.
+      - key: ZC_UFVK
+        sync: false
+      - key: ZC_API_KEY
+        generateValue: true
+      - key: ZC_WEBHOOK_SECRET
+        generateValue: true
+      - key: ZC_WEBHOOK_URL
+        value: https://zeccheckout-shop.onrender.com/webhook
+      - key: ZC_FRAME_ANCESTORS
+        value: https://zeccheckout-shop.onrender.com
+      - key: ZC_MERCHANT_NAME
+        value: Shielded Coffee (testnet demo)
+      - key: ZC_MIN_CONFIRMATIONS
+        value: "3"
+      - key: ZC_POLL_SECS
+        value: "4"
+      # No persistent disk: start each boot in a fresh address range so a late
+      # payment to an invoice from before a restart is never credited to a new one.
+      - key: ZC_DIVERSIFIER_START
+        value: boot
+      # ZC_PUBLIC_URL defaults to Render's RENDER_EXTERNAL_URL.
+      # ZC_BIRTHDAY is unset: a fresh boot starts scanning at the chain tip.
+
+  - type: web
+    name: zeccheckout-shop
+    runtime: image
+    plan: free
+    image:
+      url: ghcr.io/samizdatproject/zeccheckout:latest
+    dockerCommand: /usr/local/bin/demo-shop
+    healthCheckPath: /shop.css
+    envVars:
+      - key: SHOP_CHECKOUT_URL
+        value: https://zeccheckout-pay.onrender.com
+      - key: SHOP_API_KEY
+        fromService:
+          type: web
+          name: zeccheckout-pay
+          envVarKey: ZC_API_KEY
+      - key: SHOP_WEBHOOK_SECRET
+        fromService:
+          type: web
+          name: zeccheckout-pay
+          envVarKey: ZC_WEBHOOK_SECRET

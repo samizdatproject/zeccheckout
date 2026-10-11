@@ -116,7 +116,13 @@ fn page(title: &str, body: String) -> Html<String> {
     ))
 }
 
-async fn index() -> Html<String> {
+async fn index(State(shop): St) -> Html<String> {
+    // Wake the checkout service now (free hosts such as Render spin idle
+    // services down), so it is ready by the time the visitor clicks "Buy".
+    let warm = shop.http.get(format!("{}/healthz", shop.checkout_url));
+    tokio::spawn(async move {
+        let _ = warm.send().await;
+    });
     let items: String = PRODUCTS
         .iter()
         .map(|p| {
@@ -170,9 +176,9 @@ async fn buy(State(shop): St, headers: HeaderMap, Form(f): Form<BuyForm>) -> Res
     let inv: serde_json::Value = match res {
         Ok(r) if r.status().is_success() => match r.json().await {
             Ok(v) => v,
-            Err(_) => return (StatusCode::BAD_GATEWAY, "bad response from checkout").into_response(),
+            Err(_) => return checkout_waking(),
         },
-        _ => return (StatusCode::BAD_GATEWAY, "checkout service unavailable").into_response(),
+        _ => return checkout_waking(),
     };
     let invoice_id = inv["id"].as_str().unwrap_or_default().to_owned();
     shop.orders.lock().unwrap().insert(
@@ -181,6 +187,14 @@ async fn buy(State(shop): St, headers: HeaderMap, Form(f): Form<BuyForm>) -> Res
     );
     tracing::info!(order = %order_id, product = product.id, "order created");
     Redirect::to(&format!("/order/{order_id}")).into_response()
+}
+
+/// Shown when the checkout service is unreachable or answers with something
+/// other than an invoice (e.g. a host's "service is starting" page).
+fn checkout_waking() -> Response {
+    let body = "<h1>Checkout is starting up</h1><p>The checkout service is waking up (free hosting sleeps when idle). \
+                Please go back and try again in a minute.</p><p><a href=/>Back to the menu</a></p>";
+    (StatusCode::SERVICE_UNAVAILABLE, page("Checkout starting", body.into())).into_response()
 }
 
 async fn order_page(State(shop): St, Path(id): Path<String>) -> Response {

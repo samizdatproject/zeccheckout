@@ -28,6 +28,28 @@ Status: working prototype. It is tested on Zcash testnet with a real wallet paym
   - A signed `invoice.paid` webhook fulfils the order.
 - **More detail:** the full timeline, logs and screenshots are in [docs/demo/live2/](docs/demo/live2/) and [docs/demo/TESTNET_RUN.md](docs/demo/TESTNET_RUN.md).
 
+## Try it (public testnet demo)
+
+> **Live demo:** shop at <https://zeccheckout-shop.onrender.com>, checkout service at <https://zeccheckout-pay.onrender.com>.
+> It runs on Render's free tier. The first request after 15 idle minutes takes about 30–60 s while the service wakes up.
+> If "Buy" says the checkout is starting up, wait a minute and try again.
+
+1. Open the shop and click **Buy with shielded ZEC** on any item.
+2. Pay the invoice with **testnet** ZEC (TAZ) from either source:
+   - **A Zcash testnet wallet:** scan the QR code, or use "Pay manually" to copy the address and amount.
+   - **The Valar testnet faucet:** paste the invoice address ("Pay manually") into <https://faucet.testnet.valargroup.dev>. It sends 0.125 TAZ. That is more than the item costs, and an overpayment still counts as paid. Limit: one claim per IP and per address per 24 h.
+3. Watch the order page:
+   - **Payment seen — waiting to be mined:** if lightwalletd's mempool sees the transaction.
+   - **Payment received — confirming:** once the transaction is mined (`detected`).
+   - **Paid — thank you!:** after 3 confirmations.
+   - **Shop panel:** turns to "PAID — order fulfilled ✓ (verified webhook)" once the shop has verified the HMAC-signed webhook.
+
+**About the demo instance:**
+- It holds only a throwaway **testnet** viewing key, so it never sees real money. Never send mainnet ZEC to it.
+- It has no persistent disk: invoices and orders vanish when the free instance restarts or sleeps. Each boot uses a fresh address range (`ZC_DIVERSIFIER_START=boot`), so a late payment can never be credited to someone else's invoice.
+- The hosting provider terminates TLS, so it can see which IP opened which invoice page. This is the reverse-proxy caveat from the threat model, and it is fine for a testnet demo. For real payments, self-host.
+- Deployment details: [Deploying (Docker, Render)](#deploying-docker-render).
+
 ## Why per-invoice diversified addresses instead of memos?
 
 Compact blocks carry only the first 52 bytes of each note ciphertext. That is enough to learn the recipient and the value, but not the memo. Reading a memo means asking lightwalletd for the full transaction (`GetTransaction(txid)`), and that request tells the operator exactly which transaction belongs to the merchant.
@@ -166,11 +188,33 @@ All configuration is through environment variables; see [`.env.example`](.env.ex
 | `ZC_WEBHOOK_URL`, `ZC_WEBHOOK_SECRET` | optional | The secret must be at least 24 characters. |
 | `ZC_MIN_CONFIRMATIONS` | `3` | Use 10 or more on mainnet for large amounts. |
 | `ZC_INVOICE_TTL_SECS` | `3600` | Per-invoice override: `expires_in_secs`. |
-| `ZC_BIND`, `ZC_PUBLIC_URL` | `127.0.0.1:8080` | Bind to localhost and put an onion service or a TLS reverse proxy in front. Turn the proxy's access log off; see the threat model. |
+| `ZC_BIND`, `ZC_PUBLIC_URL` | `127.0.0.1:8080`; the public URL falls back to `RENDER_EXTERNAL_URL`, then to `http://ZC_BIND` | Bind to localhost and put an onion service or a TLS reverse proxy in front. Turn the proxy's access log off; see the threat model. |
 | `ZC_FRAME_ANCESTORS` | `'self'` | Origins allowed to embed the checkout. |
-| `ZC_DIVERSIFIER_START` | `1000000` | Invoice addresses start here, so they never collide with the low indices your normal wallet hands out. |
+| `ZC_DIVERSIFIER_START` | `1000000` | Invoice addresses start here, so they never collide with the low indices your normal wallet hands out. `boot` = `1000000 + unix_time × 1000`, a fresh range on every start, for hosts without persistent storage. |
 | `ZC_BIRTHDAY` | current tip | First block to scan on first start. |
 | `ZC_INCLUDE_MEMO` | `false` | Adds a ZIP-321 memo `Order <order_id>`. |
+| `ZC_POLL_SECS` | `15` | How often to poll lightwalletd for new blocks and the mempool (minimum 2). |
+
+## Deploying (Docker, Render)
+
+- **Image:** `ghcr.io/samizdatproject/zeccheckout:latest` (linux/amd64, distroless, non-root), built by [`.github/workflows/image.yml`](.github/workflows/image.yml) from the [`Dockerfile`](Dockerfile).
+  - Its default command is `zeccheckout serve`. Run `/usr/local/bin/demo-shop` for the demo shop.
+  - Both listen on `0.0.0.0:10000` inside the container.
+  - The SQLite database is `/home/nonroot/zeccheckout.db`. Mount a volume there to keep it.
+
+```bash
+docker run --rm -p 8080:10000 -e ZC_UFVK=uviewtest1... -e ZC_API_KEY=$(openssl rand -hex 24) \
+  -e ZC_PUBLIC_URL=http://127.0.0.1:8080 ghcr.io/samizdatproject/zeccheckout:latest
+```
+
+- **Render:** [`render.yaml`](render.yaml) is a Blueprint for the public testnet demo: two free web services, `zeccheckout-pay` and `zeccheckout-shop`, that pull the image.
+  - The API key and webhook secret are generated by Render and shared with the shop.
+  - The viewing key is the only value you paste in.
+  - Free services cannot use Render's private network, so each service is told the other's public `onrender.com` URL. Check those URLs after the first deploy.
+- **Hosts without persistent storage:**
+  - Set `ZC_DIVERSIFIER_START=boot`.
+  - Leave `ZC_BIRTHDAY` unset: a fresh start begins scanning at the current tip, and an instance that wakes from sleep catches up from where it stopped, in seconds.
+  - Invoices created before a restart are lost, which is acceptable only for a demo.
 
 ## Threat model
 
@@ -260,7 +304,7 @@ Outputs to other diversifier indices are ignored and not stored. This covers, fo
 ## Testing
 
 ```bash
-cargo test                                              # 27 unit + end-to-end tests, offline
+cargo test                                              # 28 unit + end-to-end tests, offline
 cargo test --test testnet_live -- --ignored --nocapture # live: scans 1500 real testnet blocks
 cargo clippy --all-targets                              # clean
 ```
