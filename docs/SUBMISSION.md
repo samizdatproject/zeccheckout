@@ -1,8 +1,8 @@
 # ZECATHON submission — Shielded Payments track
 
 **Project:** ZecCheckout
-**Repo:** <PUBLIC REPO URL — fill in after publishing>
-**Demo video:** <VIDEO URL>
+**Repo:** https://github.com/samizdatproject/zeccheckout
+**Demo video:** https://github.com/samizdatproject/zeccheckout/raw/main/docs/demo/live2/zeccheckout-demo-narrated.mp4 (98 s; narration is computer-generated text-to-speech, captions included; captions-only version: docs/demo/live2/zeccheckout-demo.mp4)
 **License:** MIT
 
 ## One-liner

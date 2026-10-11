@@ -18,6 +18,16 @@ A self-hosted Zcash checkout service for merchants who want to accept shielded p
 
 Status: working prototype. It is tested on Zcash testnet with a real wallet payment ([testnet run](docs/demo/TESTNET_RUN.md)), with live lightwalletd scanning, and with an in-process end-to-end test. Read [Limitations](#limitations) before using it with real money.
 
+## Demo
+
+- **Video (98 s):** [docs/demo/live2/zeccheckout-demo-narrated.mp4](docs/demo/live2/zeccheckout-demo-narrated.mp4). The narration is computer-generated (macOS text-to-speech) and captions are burned in. A [captions-only version](docs/demo/live2/zeccheckout-demo.mp4) is also available.
+- **What it shows:** a real Zcash **testnet** payment on 2026-10-11, txid `858db20b…6580`, Ironwood pool.
+  - The demo shop creates an invoice.
+  - The payment is seen in the mempool 3 s after it is sent.
+  - The invoice moves to `detected`, then `paid` after 6 confirmations.
+  - A signed `invoice.paid` webhook fulfils the order.
+- **More detail:** the full timeline, logs and screenshots are in [docs/demo/live2/](docs/demo/live2/) and [docs/demo/TESTNET_RUN.md](docs/demo/TESTNET_RUN.md).
+
 ## Why per-invoice diversified addresses instead of memos?
 
 Compact blocks carry only the first 52 bytes of each note ciphertext. That is enough to learn the recipient and the value, but not the memo. Reading a memo means asking lightwalletd for the full transaction (`GetTransaction(txid)`), and that request tells the operator exactly which transaction belongs to the merchant.
