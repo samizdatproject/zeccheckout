@@ -4,6 +4,12 @@ Format: screen recording only (no face), 1080p, captions burned in or as an
 .srt. Narration optional; the captions below carry the story. Target length
 1:55–2:00.
 
+## Ready-made version
+
+`docs/demo/live2/zeccheckout-demo.mp4` (98 s, 1080p, captions burned in) and `zeccheckout-demo-narrated.mp4` (the same, with a macOS `say` narration) were built from the real run of 2026-10-11 (`docs/demo/live2/README.md`). They are a captioned slideshow of that run's screenshots and logs. You can submit one as-is, or use it as the storyboard for a live screen recording made with the steps below.
+- **If you keep the narrated version:** disclose that the voice is synthetic.
+- **If you re-record:** make sure the server and the shop share `ZC_WEBHOOK_SECRET`. On 2026-10-11, a start script that generated a random secret delayed fulfilment by 10 min.
+
 ## Before recording (setup, not shown)
 
 Pick ONE payment path:

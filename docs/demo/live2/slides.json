@@ -1,0 +1,71 @@
+[
+ {
+  "title": "ZecCheckout<small>Shielded Zcash checkout you host yourself</small>",
+  "secs": 6,
+  "caption": "Accept private Zcash payments. Your server never holds a spending key."
+ },
+ {
+  "term": "<b>$ zeccheckout serve</b>\nINFO starting ZecCheckout (viewing key only) network=&quot;testnet&quot;\n     lightwalletd=https://testnet.zec.rocks:443 min_conf=6\nINFO listening on http://127.0.0.1:8080\n\n<b># configured with a Unified Full Viewing Key (uviewtest1\u2026) only</b>\n<b># no seed, no spending key: a breach cannot move funds</b>",
+  "secs": 8,
+  "tag": "server",
+  "caption": "The server is configured with a Unified Full Viewing Key only. If it is compromised, no funds can move."
+ },
+ {
+  "image": "docs/demo/live2/0-shop-menu.png",
+  "secs": 6,
+  "tag": "demo shop",
+  "caption": "A demo coffee shop. Buying creates an invoice server-to-server through the merchant API."
+ },
+ {
+  "image": "docs/demo/live2/1-pending.png",
+  "secs": 9.2,
+  "tag": "11:08:43Z",
+  "caption": "Each invoice gets a fresh diversified shielded address (Orchard + Sapling, never transparent), shown as a ZIP-321 QR code."
+ },
+ {
+  "term": "<b>$ curl -X POST https://faucet.testnet.valargroup.dev/api/claim \\</b>\n<b>       -d '{\"address\":\"utest1\u2026(invoice address)\"}'</b>\n{&quot;id&quot;:&quot;6eddc5a5\u2026&quot;,&quot;status&quot;:&quot;queued&quot;,&quot;amount&quot;:&quot;0.125&quot;}\n\n<b>$ curl https://faucet.testnet.valargroup.dev/api/claim/6eddc5a5\u2026</b>\n{&quot;status&quot;:&quot;sent&quot;,&quot;txid&quot;:&quot;858db20bfaa2948fc0d170769bf4d801\n          fc3803ba4653530258c16ac57c6b6580&quot;,&quot;broadcastOk&quot;:3}\n\n<b># a real zecd wallet on the public Zcash testnet; no memo attached</b>",
+  "secs": 11.4,
+  "tag": "11:09:03Z",
+  "caption": "A testnet faucet plays the customer: a real wallet sends 0.125 TAZ to the invoice address. No memo is needed; the address identifies the invoice."
+ },
+ {
+  "image": "docs/demo/live2/2-mempool-seen.png",
+  "secs": 8,
+  "tag": "11:09:06Z",
+  "caption": "Seen in the mempool within 3 seconds: transactions are trial-decrypted locally with the viewing key."
+ },
+ {
+  "image": "docs/demo/live2/3-detected.png",
+  "secs": 8,
+  "tag": "11:09:55Z",
+  "caption": "Mined. The payment is found by trial-decrypting the new compact block (Ironwood pool, same viewing key)."
+ },
+ {
+  "term": "11:09:03 faucet claim accepted\n11:09:06 checkout: payment seen in the mempool (0.125 ZEC)\n11:09:28 mined in block 4488510 (header time)\n11:09:55 INFO payment output detected invoice=6d7de3b8\u2026 pool=&quot;ironwood&quot;\n11:09:55 INFO status change from=&quot;pending&quot; to=&quot;detected&quot;\n          blocks 4488511 \u2026 4488515 \u2192 6 confirmations\n11:11:08 INFO status change from=&quot;detected&quot; to=&quot;paid&quot;\n\n<b># matched by diversifier index: no memo, no GetTransaction call</b>",
+  "secs": 11,
+  "tag": "server log",
+  "caption": "Matched by diversifier index: no memo fetch, no GetTransaction call. Paid after 6 confirmations (demo setting; default is 3)."
+ },
+ {
+  "image": "docs/demo/live2/5-paid-fulfilled.png",
+  "secs": 9,
+  "tag": "shop",
+  "caption": "The shop fulfils the order only on the HMAC-signed webhook, never on what the browser says."
+ },
+ {
+  "term": "<b>demo-shop</b>\nINFO signature verified; payment confirmed; order fulfilled order=&quot;ord_359ae3d03222ed63&quot;\n\n<b>webhooks (HMAC-SHA256, ZecCheckout-Signature: t=\u2026,v1=\u2026)</b>\nseq 1  invoice.detected  status=detected  received_zat=12500000\nseq 2  invoice.paid      status=paid      confirmed_zat=12500000\n\n<b># no address, txid or memo in the payload</b>",
+  "secs": 8,
+  "tag": "shop log",
+  "caption": "Signed webhooks arrive in order (detected, then paid) and carry no addresses or txids."
+ },
+ {
+  "title": "No CDNs \u00b7 no trackers \u00b7 strict CSP<small>no request logs \u00b7 viewing key only \u00b7 self-host lightwalletd or use Tor</small>",
+  "secs": 8,
+  "caption": "No third parties in the browser. The threat model is in the README."
+ },
+ {
+  "title": "ZecCheckout<small>Open source \u00b7 MIT \u00b7 Rust + librustzcash<br>Built for ZECATHON, Shielded Payments track</small>",
+  "secs": 5,
+  "caption": "Real testnet payment, txid 858db20b\u20266580, 2026-10-11."
+ }
+]

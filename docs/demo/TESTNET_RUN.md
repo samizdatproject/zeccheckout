@@ -67,6 +67,20 @@ The payment was detected live, 57 s after the claim, and needed no intervention.
 - **No `detected` state.** Testnet produced blocks 4485031–4485033 within about 36 s of header time. Header times run 8–80 s ahead of arrival (measured in `live/chain-analysis.txt`), so the three blocks reached lightwalletd close together. One 15 s scan step therefore saw the payment already at 3 confirmations. Commit `19c7cbc` now records `detected` and then `paid` in that case. The webhooks are `invoice.detected` (seq n) then `invoice.paid` (seq n+1), with the same timestamp. A checkout page that polls every 2 s still jumps from pending to paid.
 - **No mempool hint.** The faucet pushes its transaction straight to the Zakura nodes, which mine it, and the transaction was in a block within seconds. `testnet.zec.rocks` also misses most mempool transactions: in a sample taken just after the run, it held 4 of the 18 transactions a Zakura node held at the same moments. The mempool request does return Ironwood (33 actions seen in one snapshot), so the code path works; the faucet's transaction simply never reached that mempool while it was being polled.
 
+## Run 3 (2026-10-11): full shop flow, every state live
+
+Build `19c7cbc`, min_conf 6, poll 3 s. Faucet → shop invoice `6d7de3b8…`, txid `858db20bfaa2948fc0d170769bf4d801fc3803ba4653530258c16ac57c6b6580`.
+
+| Time (UTC) | Event |
+|---|---|
+| 11:09:06 | Mempool hint shown, 3 s after the claim |
+| 11:09:55 | `detected` |
+| 11:11:08 | `paid` (6 confirmations) |
+
+Webhook fulfilment was delayed 10 min by a webhook-secret mismatch in the start script (an operator configuration error). After the fix, `detected` and then `paid` were delivered in order.
+
+Details, screenshots and the captioned demo video are in [`live2/`](live2/README.md).
+
 ## Files
 
 - `live/`: run 2 files: `checkout-pending.png`, `checkout-paid.png`, `zeccheckout.log`, `faucet-claim.log`, `poller-timeline.log`, `chain-analysis.txt` (block header times, an arrival probe, a mempool comparison).

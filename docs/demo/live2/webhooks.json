@@ -1,0 +1,34 @@
+[
+  {
+    "created": 1791716995,
+    "event": "invoice.detected",
+    "event_id": "6d7de3b8d556ec65b18d1a2156c19d90-1",
+    "invoice": {
+      "amount_zat": 1000000,
+      "amount_zec": "0.01",
+      "confirmed_zat": 0,
+      "id": "6d7de3b8d556ec65b18d1a2156c19d90",
+      "order_id": "ord_359ae3d03222ed63",
+      "paid_at": null,
+      "received_zat": 12500000,
+      "status": "detected"
+    },
+    "seq": 1
+  },
+  {
+    "created": 1791717068,
+    "event": "invoice.paid",
+    "event_id": "6d7de3b8d556ec65b18d1a2156c19d90-2",
+    "invoice": {
+      "amount_zat": 1000000,
+      "amount_zec": "0.01",
+      "confirmed_zat": 12500000,
+      "id": "6d7de3b8d556ec65b18d1a2156c19d90",
+      "order_id": "ord_359ae3d03222ed63",
+      "paid_at": 1791717068,
+      "received_zat": 12500000,
+      "status": "paid"
+    },
+    "seq": 2
+  }
+]

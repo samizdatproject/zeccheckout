@@ -1,0 +1,23 @@
+# zeccheckout serve (build 19c7cbc), testnet.zec.rocks, min_conf=6, poll 3 s. Transport-retry warnings omitted.
+2026-10-11T11:08:03.453544Z  INFO starting ZecCheckout (viewing key only) network="testnet" lightwalletd=https://testnet.zec.rocks:443 min_conf=6
+2026-10-11T11:08:03.457117Z  INFO listening on http://127.0.0.1:8080
+2026-10-11T11:08:03.458754Z  WARN webhook delivery failed: connection error outbox_id=4 attempts=1 give_up=false
+2026-10-11T11:08:15.487128Z  WARN webhook delivery failed: HTTP 401 outbox_id=4 attempts=2 give_up=false
+2026-10-11T11:08:36.534910Z  WARN webhook delivery failed: HTTP 401 outbox_id=4 attempts=3 give_up=false
+2026-10-11T11:08:43.689771Z  INFO invoice created invoice=6d7de3b8d556ec65b18d1a2156c19d90
+2026-10-11T11:09:18.581232Z  WARN webhook delivery failed: HTTP 401 outbox_id=4 attempts=4 give_up=false
+2026-10-11T11:09:55.829148Z  INFO payment output detected invoice=6d7de3b8d556ec65b18d1a2156c19d90 pool="ironwood"
+2026-10-11T11:09:55.838249Z  INFO status change invoice=6d7de3b8d556ec65b18d1a2156c19d90 from="pending" to="detected"
+2026-10-11T11:09:57.625730Z  WARN webhook delivery failed: HTTP 401 outbox_id=5 attempts=1 give_up=false
+2026-10-11T11:10:09.787820Z  WARN webhook delivery failed: HTTP 401 outbox_id=5 attempts=2 give_up=false
+2026-10-11T11:10:30.819379Z  WARN webhook delivery failed: HTTP 401 outbox_id=5 attempts=3 give_up=false
+2026-10-11T11:10:39.830316Z  WARN webhook delivery failed: HTTP 401 outbox_id=4 attempts=5 give_up=false
+2026-10-11T11:11:08.261245Z  INFO status change invoice=6d7de3b8d556ec65b18d1a2156c19d90 from="detected" to="paid"
+2026-10-11T11:11:12.910053Z  WARN webhook delivery failed: HTTP 401 outbox_id=5 attempts=4 give_up=false
+2026-10-11T11:12:34.112408Z  WARN webhook delivery failed: HTTP 401 outbox_id=5 attempts=5 give_up=false
+2026-10-11T11:13:19.161812Z  WARN webhook delivery failed: HTTP 401 outbox_id=4 attempts=6 give_up=false
+2026-10-11T11:15:16.263530Z  WARN webhook delivery failed: HTTP 401 outbox_id=5 attempts=6 give_up=false
+2026-10-11T11:18:40.439604Z  WARN webhook delivery failed: HTTP 401 outbox_id=4 attempts=7 give_up=false
+2026-10-11T11:20:37.538006Z  WARN webhook delivery failed: HTTP 401 outbox_id=5 attempts=7 give_up=false
+2026-10-11T11:21:13.471624Z  INFO starting ZecCheckout (viewing key only) network="testnet" lightwalletd=https://testnet.zec.rocks:443 min_conf=6
+2026-10-11T11:21:13.473293Z  INFO listening on http://127.0.0.1:8080

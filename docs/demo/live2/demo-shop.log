@@ -1,0 +1,16 @@
+2026-10-11T11:08:04.297962Z  INFO demo shop on http://127.0.0.1:8081
+2026-10-11T11:08:15.486150Z  WARN rejected webhook: signature mismatch
+2026-10-11T11:08:36.534071Z  WARN rejected webhook: signature mismatch
+2026-10-11T11:08:43.690839Z  INFO order created order=ord_359ae3d03222ed63 product="beans"
+2026-10-11T11:09:18.580505Z  WARN rejected webhook: signature mismatch
+2026-10-11T11:09:57.622845Z  WARN rejected webhook: signature mismatch
+2026-10-11T11:10:09.776954Z  WARN rejected webhook: signature mismatch
+2026-10-11T11:10:30.818106Z  WARN rejected webhook: signature mismatch
+2026-10-11T11:10:39.829864Z  WARN rejected webhook: signature mismatch
+2026-10-11T11:11:12.908215Z  WARN rejected webhook: signature mismatch
+2026-10-11T11:12:34.102617Z  WARN rejected webhook: signature mismatch
+2026-10-11T11:13:19.160744Z  WARN rejected webhook: signature mismatch
+2026-10-11T11:15:16.261426Z  WARN rejected webhook: signature mismatch
+2026-10-11T11:18:40.438225Z  WARN rejected webhook: signature mismatch
+2026-10-11T11:20:37.535513Z  WARN rejected webhook: signature mismatch
+2026-10-11T11:21:13.477011Z  INFO signature verified; payment confirmed; order fulfilled order="ord_359ae3d03222ed63"

@@ -1,0 +1,21 @@
+2026-10-11T11:08:43Z order ord_359ae3d03222ed63 invoice 6d7de3b8d556ec65b18d1a2156c19d90 amount 0.01 min_conf 6
+2026-10-11T11:09:02Z screenshot 1-pending.png
+2026-10-11T11:09:03Z faucet claim 202 {"id": "6eddc5a50b021e299ce81946e43c0cd2", "status": "queued", "amount": "0.125", "broadcastOk": 0, "broadcastNodes": 3, "createdAt": 1791716942}
+2026-10-11T11:09:03Z state pending mempool 0 received 0 confirmed 0 scanned_height 4488508 approx_confirmations None shop {"fulfilled": false, "status": "pending"}
+2026-10-11T11:09:06Z faucet sent txid 858db20bfaa2948fc0d170769bf4d801fc3803ba4653530258c16ac57c6b6580 status sent
+2026-10-11T11:09:06Z state pending mempool 0.125 received 0 confirmed 0 scanned_height 4488509 approx_confirmations None shop {"fulfilled": false, "status": "pending"}
+2026-10-11T11:09:09Z screenshot 2-pending.png
+2026-10-11T11:09:43Z state pending mempool 0 received 0 confirmed 0 scanned_height 4488509 approx_confirmations None shop {"fulfilled": false, "status": "pending"}
+2026-10-11T11:09:58Z payment mined at height 4488510
+2026-10-11T11:09:58Z state detected mempool 0 received 0.125 confirmed 0 scanned_height 4488510 approx_confirmations 1 shop {"fulfilled": false, "status": "pending"}
+2026-10-11T11:10:05Z screenshot 3-detected-conf1.png
+2026-10-11T11:10:07Z state detected mempool 0 received 0.125 confirmed 0 scanned_height 4488511 approx_confirmations 2 shop {"fulfilled": false, "status": "pending"}
+2026-10-11T11:10:12Z screenshot 4-detected-conf2.png
+2026-10-11T11:10:21Z state detected mempool 0 received 0.125 confirmed 0 scanned_height 4488513 approx_confirmations 4 shop {"fulfilled": false, "status": "pending"}
+2026-10-11T11:10:25Z screenshot 5-detected-conf4.png
+2026-10-11T11:10:55Z state detected mempool 0 received 0.125 confirmed 0 scanned_height 4488514 approx_confirmations 5 shop {"fulfilled": false, "status": "pending"}
+2026-10-11T11:10:59Z screenshot 6-detected-conf5.png
+2026-10-11T11:11:09Z state paid mempool 0 received 0.125 confirmed 0.125 scanned_height 4488516 approx_confirmations None shop {"fulfilled": false, "status": "pending"}
+2026-10-11T11:11:13Z screenshot 7-paid.png
+2026-10-11T11:21:36Z screenshot 8-paid-fulfilled.png
+2026-10-11T11:21:38Z screenshot 9-checkout-paid.png

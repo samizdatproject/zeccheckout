@@ -1,0 +1,47 @@
+1
+00:00:00,000 --> 00:00:06,000
+Accept private Zcash payments. Your server never holds a spending key.
+
+2
+00:00:06,000 --> 00:00:14,000
+The server is configured with a Unified Full Viewing Key only. If it is compromised, no funds can move.
+
+3
+00:00:14,000 --> 00:00:20,000
+A demo coffee shop. Buying creates an invoice server-to-server through the merchant API.
+
+4
+00:00:20,000 --> 00:00:29,200
+Each invoice gets a fresh diversified shielded address (Orchard + Sapling, never transparent), shown as a ZIP-321 QR code.
+
+5
+00:00:29,200 --> 00:00:40,600
+A testnet faucet plays the customer: a real wallet sends 0.125 TAZ to the invoice address. No memo is needed; the address identifies the invoice.
+
+6
+00:00:40,600 --> 00:00:48,600
+Seen in the mempool within 3 seconds: transactions are trial-decrypted locally with the viewing key.
+
+7
+00:00:48,600 --> 00:00:56,600
+Mined. The payment is found by trial-decrypting the new compact block (Ironwood pool, same viewing key).
+
+8
+00:00:56,600 --> 00:01:07,600
+Matched by diversifier index: no memo fetch, no GetTransaction call. Paid after 6 confirmations (demo setting; default is 3).
+
+9
+00:01:07,600 --> 00:01:16,600
+The shop fulfils the order only on the HMAC-signed webhook, never on what the browser says.
+
+10
+00:01:16,600 --> 00:01:24,600
+Signed webhooks arrive in order (detected, then paid) and carry no addresses or txids.
+
+11
+00:01:24,600 --> 00:01:32,600
+No third parties in the browser. The threat model is in the README.
+
+12
+00:01:32,600 --> 00:01:37,600
+Real testnet payment, txid 858db20b…6580, 2026-10-11.
