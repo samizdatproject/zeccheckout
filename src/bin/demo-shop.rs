@@ -106,7 +106,7 @@ async fn main() -> Result<()> {
                 if let Ok(v) = HeaderValue::from_str(&csp) {
                     res.headers_mut().insert(header::CONTENT_SECURITY_POLICY, v);
                 }
-                res.headers_mut().insert(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer"));
+                res.headers_mut().insert(header::REFERRER_POLICY, HeaderValue::from_static("same-origin"));
                 res
             }
         }))
@@ -160,11 +160,9 @@ fn new_order_id() -> String {
 
 async fn buy(State(shop): St, headers: HeaderMap, Form(f): Form<BuyForm>) -> Response {
     // Minimal CSRF defence: browsers send Origin on cross-site POSTs.
-    if let Some(origin) = headers.get(header::ORIGIN).and_then(|v| v.to_str().ok()) {
-        let host = headers.get(header::HOST).and_then(|v| v.to_str().ok()).unwrap_or_default();
-        if !same_origin(origin, host, &shop.public_origins) {
-            return (StatusCode::FORBIDDEN, "cross-origin request refused").into_response();
-        }
+    let h = |name: &str| headers.get(name).and_then(|v| v.to_str().ok());
+    if !csrf_ok(h("origin"), h("sec-fetch-site"), h("host").unwrap_or_default(), &shop.public_origins) {
+        return (StatusCode::FORBIDDEN, "cross-origin request refused").into_response();
     }
     let Some(product) = PRODUCTS.iter().find(|p| p.id == f.product) else {
         return (StatusCode::BAD_REQUEST, "unknown product").into_response();
@@ -199,7 +197,20 @@ async fn buy(State(shop): St, headers: HeaderMap, Form(f): Form<BuyForm>) -> Res
     Redirect::to(&format!("/order/{order_id}")).into_response()
 }
 
-/// Minimal CSRF check: the request's Origin must be this shop. Behind a TLS
+/// CSRF check for the shop's form POST.
+/// - `Sec-Fetch-Site` (set by browsers, not settable by page scripts) decides
+///   when present: only `same-origin` passes.
+/// - Without it (older browsers, curl): an `Origin` header must be this shop;
+///   `Origin: null` is refused; no Origin at all (non-browser client) passes.
+fn csrf_ok(origin: Option<&str>, sec_fetch_site: Option<&str>, host: &str, public_origins: &[String]) -> bool {
+    match (sec_fetch_site, origin) {
+        (Some(site), _) => site.eq_ignore_ascii_case("same-origin"),
+        (None, Some(o)) => same_origin(o, host, public_origins),
+        (None, None) => true,
+    }
+}
+
+/// The request's Origin must be this shop. Behind a TLS
 /// proxy (e.g. Render) the Host header may not be the public host, so the
 /// configured public origins are accepted too.
 fn same_origin(origin: &str, host: &str, public_origins: &[String]) -> bool {
@@ -282,7 +293,26 @@ async fn webhook_rx(State(shop): St, headers: HeaderMap, body: Bytes) -> Respons
 
 #[cfg(test)]
 mod tests {
-    use super::same_origin;
+    use super::{csrf_ok, same_origin};
+
+    #[test]
+    fn csrf_uses_sec_fetch_site_and_handles_origin_null() {
+        let public = vec!["https://zeccheckout-shop.onrender.com".to_owned()];
+        let host = "10.0.0.7:10000";
+        // Chrome form POST under a no-referrer policy sends Origin: null.
+        assert!(csrf_ok(Some("null"), Some("same-origin"), host, &public));
+        assert!(!csrf_ok(Some("null"), Some("cross-site"), host, &public));
+        assert!(!csrf_ok(Some("null"), Some("same-site"), host, &public));
+        assert!(!csrf_ok(Some("null"), None, host, &public));
+        // Sec-Fetch-Site wins over a matching Origin.
+        assert!(!csrf_ok(Some("https://zeccheckout-shop.onrender.com"), Some("cross-site"), host, &public));
+        assert!(csrf_ok(Some("https://zeccheckout-shop.onrender.com"), Some("same-origin"), host, &public));
+        // Older browsers: Origin only.
+        assert!(csrf_ok(Some("https://zeccheckout-shop.onrender.com"), None, host, &public));
+        assert!(!csrf_ok(Some("https://evil.example"), None, host, &public));
+        // Non-browser clients (curl, server-to-server) send neither.
+        assert!(csrf_ok(None, None, host, &public));
+    }
 
     #[test]
     fn origin_check_accepts_public_url_behind_proxy() {
