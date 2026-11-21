@@ -1,5 +1,7 @@
 # ZecCheckout
 
+[![tests](https://github.com/samizdatproject/zeccheckout/actions/workflows/image.yml/badge.svg)](https://github.com/samizdatproject/zeccheckout/actions/workflows/image.yml)
+
 A self-hosted Zcash checkout service for merchants who want to accept shielded payments. The server holds only a viewing key.
 
 - **The server holds only a Unified Full Viewing Key (UFVK).** It never sees a seed or a spending key, so if it is compromised, no funds can be stolen.
